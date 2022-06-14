@@ -1,0 +1,9 @@
+{"lr1110_tranceiver_version": {
+  "version": "0307",
+  "url": "https://api.github.com/repos/Lora-net/radio_firmware_images/contents/lr1110/transceiver/lr1110_transceiver_0307.h",
+  "hash": "638a2630f5b1725fcb78a34ef10467d0"},
+  "lbm_app": {
+    "version": "2.00.07",
+    "url": "https://api.github.com/repos/Lora-net/SWSD004/contents/apps/demonstrations/tracker_application/bin/tracker_application.bin",
+    "hash": "6db8de70c2274920a1c34c5f4c4417ad"}
+}

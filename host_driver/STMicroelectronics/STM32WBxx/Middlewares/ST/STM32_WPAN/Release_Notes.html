@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Release Notes for STM32 Middleware WPAN</title>
+  <style type="text/css">
+      code{white-space: pre-wrap;}
+      span.smallcaps{font-variant: small-caps;}
+      span.underline{text-decoration: underline;}
+      div.column{display: inline-block; vertical-align: top; width: 50%;}
+  </style>
+  <link rel="stylesheet" href="_htmresc/mini-st.css" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<div class="row">
+<div class="col-sm-12 col-lg-4">
+<div class="card fluid">
+<div class="sectione dark">
+<center>
+<h1 id="release-notes-for-stm32-middleware-wpan"><small>Release Notes for</small> STM32 Middleware WPAN</h1>
+<p>Copyright © 2020 STMicroelectronics<br />
+</p>
+<a href="https://www.st.com" class="logo"><img src="_htmresc/st_logo.png" alt="ST logo" /></a>
+</center>
+</div>
+</div>
+<h1 id="license">License</h1>
+<p>This software component is licensed by ST under Ultimate Liberty license SLA0044, the “License”;</p>
+<p>You may not use this file except in compliance with the License.</p>
+<p>You may obtain a copy of the License at: <a href="http://www.st.com/SLA0044">SLA0044</a></p>
+<h1 id="purpose">Purpose</h1>
+<p>STM32 Wireless Personal Area Network Middleware developed within the STM32WB framework is used to support:</p>
+<ul>
+<li><p>Bluetooth Low Energy 5 Certified Applications</p></li>
+<li><p>802.15.4 Thread Certified Applications (based on <a href="thread\openthread\Release_Notes.html">OpenThread</a> stack)</p></li>
+<li><p>802.15.4 MAC layer</p></li>
+<li><p>Zigbee Applications</p></li>
+</ul>
+<p><strong>NOTE</strong> : Depending on the kind of Application targeted, the appropriate Wireless Coprocessor Firmware needs to be loaded.</p>
+<ul>
+<li><strong>Zigbee</strong> clusters are provided as a library.
+<ul>
+<li>Available on <strong>IAR/SW4STM32</strong>(<strong>stm32wb_zigbee_wb_lib.a</strong>) and <strong>Keil</strong>(<strong>stm32wb_zigbee_wb_lib_keil.lib</strong>) under Middlewares/ST/STM32_WPAN/zigbee/lib.</li>
+<li>To get access to Zigbee clusters source code, please contact ST local office.</li>
+</ul></li>
+<li><p>All available binaries are located under/Projects/STM32_Copro_Wireless_Binaries directory.</p></li>
+<li><p>Refer to UM2237 to learn how to use/install STM32CubeProgrammer.</p></li>
+<li>Refer to /Projects/STM32_Copro_Wireless_Binaries/ReleaseNote.html for the detailed procedure to change the Coprocessor binary.</li>
+</ul>
+</div>
+<div class="col-sm-12 col-lg-8">
+<h1 id="update-history">Update History</h1>
+<div class="collapse">
+<input type="checkbox" id="collapse-section10" checked aria-hidden="true"> <label for="collapse-section10" aria-hidden="false">V1.8.0 / 22-June-2020</label>
+<div>
+<h2 id="main-changes">Main Changes</h2>
+<ul>
+<li>BLE-Mesh library version 1.12.008
+<ul>
+<li>Mesh Model Client &amp; Server Certification Passed – TCRL 2019-2</li>
+<li>Management of Client Models in PRF Node project</li>
+<li>Correction on Vendor message commands</li>
+<li>Changes Models enabling in mesh_cfg_usr.h with the definition of a bitmap of 3 bits:
+<ul>
+<li>bit 2 element 3</li>
+<li>bit 1 element 2</li>
+<li>bit 0 element 1</li>
+</ul></li>
+</ul></li>
+<li>BLE WPAN updates
+<ul>
+<li><strong>ID 83714</strong> - Support of four new events to notify the CPU1 about flash operation (after aci_gap_clear_security_db())</li>
+<li><strong>ID 83750</strong> - PREPARE_WRITE_LIST_SIZE and MBLOCKS_COUNT in app_conf.f defined with macro The macro definition is required to keep these parameters consistent with other parameters.</li>
+<li><strong>ID 85448</strong> - Bonding (CFG_BONDING_MODE=1) in BLE_HeartRate application</li>
+<li><strong>ID 85782</strong> - Option to move NVM to unsecure SRAM2</li>
+<li><strong>ID 86573</strong> - BLE_Ota updated to pad with 0xFF the uncomplete data to be written in flash</li>
+<li><strong>ID 86711</strong> - New command SHCI_C2_Config() available to configure system parameter on the CPU2 This command can be used to configure the NVM in either SRAM2 or Flash and to mask asynchronous system events reported by the CPU2. More details in ./interface/patterns/ble_thread/shci/shci.h</li>
+</ul></li>
+<li>ZigBee
+<ul>
+<li>FFD Zigbee 3.0 certification compliant.</li>
+<li>Support of OTA.</li>
+<li>Support of persistent data management (NVM).</li>
+<li>Exposure of APIs allowing access to APS layer.</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section9" aria-hidden="true"> <label for="collapse-section9" aria-hidden="false">V1.7.0 / 11-May-2020</label>
+<div>
+<h2 id="main-changes-1">Main Changes</h2>
+<p>BLE-Mesh:</p>
+<ul>
+<li>BLE Mesh Models Fixe/Update</li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section8" aria-hidden="true"> <label for="collapse-section8" aria-hidden="false">V1.6.0 / 27-March-2020</label>
+<div>
+<h2 id="main-changes-2">Main Changes</h2>
+<p>BLE-Mesh:</p>
+<ul>
+<li>BLE-Mesh library version 1.12.007
+<ul>
+<li>Updated for Delta level set binding to Light lightness</li>
+<li>Multi Key updates.</li>
+<li>Correction of FSM issues in the LC Model: no way to consume a packet internally.</li>
+<li>Correction of Sensor_LC_Light_Publish sending wrong property (and LC Model handling wrong property).</li>
+<li>Updates on Generic Models for Certification tests: Generic OnOff, Level, Power OnOff, Transition Time<br />
+</li>
+<li>Update Multi elements support</li>
+<li>Changes for DYNAMIC_PROVISIONER in Provisioner project</li>
+</ul></li>
+<li>New Cryptographic library v3.1.3</li>
+</ul>
+<p>Zigbee:</p>
+<ul>
+<li>Libarry available on IAR/SW4STM32(stm32wb_zigbee_wb_lib.a) and Keil(stm32wb_zigbee_wb_lib_keil.lib)</li>
+<li>Support following list (47 clusters):</li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th>Cluster Number</th>
+<th>Cluster ID</th>
+<th style="text-align: left;">Cluster Name</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>0x0000</td>
+<td style="text-align: left;">Basic</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>0x0001</td>
+<td style="text-align: left;">Power Configuration</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>0x0003</td>
+<td style="text-align: left;">Identify6</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>0x0004</td>
+<td style="text-align: left;">Groups</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>0x0005</td>
+<td style="text-align: left;">Scenes</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>0x0006</td>
+<td style="text-align: left;">On/Off</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>0x0008</td>
+<td style="text-align: left;">Level Control</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>0x000a</td>
+<td style="text-align: left;">Time</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td>0x0019</td>
+<td style="text-align: left;">OTA Upgrade</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td>0x0020</td>
+<td style="text-align: left;">Poll Control</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td>0x0021</td>
+<td style="text-align: left;">Green Power Proxy</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td>0x0102</td>
+<td style="text-align: left;">Window Covering</td>
+</tr>
+<tr class="odd">
+<td>13</td>
+<td>0x0202</td>
+<td style="text-align: left;">Fan Control</td>
+</tr>
+<tr class="even">
+<td>14</td>
+<td>0x0204</td>
+<td style="text-align: left;">Thermostat User Interface Configuration</td>
+</tr>
+<tr class="odd">
+<td>15</td>
+<td>0x0300</td>
+<td style="text-align: left;">Color control</td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td>0x0301</td>
+<td style="text-align: left;">Ballast Configuration</td>
+</tr>
+<tr class="odd">
+<td>17</td>
+<td>0x0400</td>
+<td style="text-align: left;">Illuminance Measurement</td>
+</tr>
+<tr class="even">
+<td>18</td>
+<td>0x0402</td>
+<td style="text-align: left;">Temperature Measurement</td>
+</tr>
+<tr class="odd">
+<td>19</td>
+<td>0x0406</td>
+<td style="text-align: left;">Occupancy Sensing</td>
+</tr>
+<tr class="even">
+<td>20</td>
+<td>0x0502</td>
+<td style="text-align: left;">IAS Warning Device (WD)</td>
+</tr>
+<tr class="odd">
+<td>21</td>
+<td>0x0b05</td>
+<td style="text-align: left;">Diagnostics</td>
+</tr>
+<tr class="even">
+<td>22</td>
+<td>0x1000</td>
+<td style="text-align: left;">Touchlink</td>
+</tr>
+<tr class="odd">
+<td>23</td>
+<td>0x0002</td>
+<td style="text-align: left;">Device Temperature Configuration</td>
+</tr>
+<tr class="even">
+<td>24</td>
+<td>0x0007</td>
+<td style="text-align: left;">On/Off Switch Configuration</td>
+</tr>
+<tr class="odd">
+<td>25</td>
+<td>0x0009</td>
+<td style="text-align: left;">Alarms</td>
+</tr>
+<tr class="even">
+<td>26</td>
+<td>0x000b</td>
+<td style="text-align: left;">RSSI Location</td>
+</tr>
+<tr class="odd">
+<td>27</td>
+<td>0x0015</td>
+<td style="text-align: left;">Commissioning</td>
+</tr>
+<tr class="even">
+<td>28</td>
+<td>0x001a</td>
+<td style="text-align: left;">Power Profile Cluster</td>
+</tr>
+<tr class="odd">
+<td>29</td>
+<td>0x0024</td>
+<td style="text-align: left;">Nearest Gateway Cluster</td>
+</tr>
+<tr class="even">
+<td>30</td>
+<td>0x0101</td>
+<td style="text-align: left;">Door Lock</td>
+</tr>
+<tr class="odd">
+<td>31</td>
+<td>0x0200</td>
+<td style="text-align: left;">Pump Configuration and Control</td>
+</tr>
+<tr class="even">
+<td>32</td>
+<td>0x0201</td>
+<td style="text-align: left;">Thermostat</td>
+</tr>
+<tr class="odd">
+<td>33</td>
+<td>0x0203</td>
+<td style="text-align: left;">Dehumidification Control</td>
+</tr>
+<tr class="even">
+<td>34</td>
+<td>0x0401</td>
+<td style="text-align: left;">Illuminance Level Sensing</td>
+</tr>
+<tr class="odd">
+<td>35</td>
+<td>0x0403</td>
+<td style="text-align: left;">Pressure Measurement</td>
+</tr>
+<tr class="even">
+<td>36</td>
+<td>0x0405</td>
+<td style="text-align: left;">Relative Humidity Measurement</td>
+</tr>
+<tr class="odd">
+<td>37</td>
+<td>0x0500</td>
+<td style="text-align: left;">IAS Zone</td>
+</tr>
+<tr class="even">
+<td>38</td>
+<td>0x0501</td>
+<td style="text-align: left;">IAS Ancillary Control Equipment (ACE)</td>
+</tr>
+<tr class="odd">
+<td>39</td>
+<td>0x0700</td>
+<td style="text-align: left;">Price</td>
+</tr>
+<tr class="even">
+<td>40</td>
+<td>0x0701</td>
+<td style="text-align: left;">Demand Response and Load Control</td>
+</tr>
+<tr class="odd">
+<td>41</td>
+<td>0x0702</td>
+<td style="text-align: left;">Metering</td>
+</tr>
+<tr class="even">
+<td>42</td>
+<td>0x0703</td>
+<td style="text-align: left;">Messaging</td>
+</tr>
+<tr class="odd">
+<td>43</td>
+<td>0x0704</td>
+<td style="text-align: left;">Smart Energy Tunneling (Complex Metering)</td>
+</tr>
+<tr class="even">
+<td>44</td>
+<td>0x0800</td>
+<td style="text-align: left;">Key Establishment</td>
+</tr>
+<tr class="odd">
+<td>45</td>
+<td>0x0904</td>
+<td style="text-align: left;">Voice Over ZigBee</td>
+</tr>
+<tr class="even">
+<td>46</td>
+<td>0x0b01</td>
+<td style="text-align: left;">Meter Identification</td>
+</tr>
+<tr class="odd">
+<td>47</td>
+<td>0x0b04</td>
+<td style="text-align: left;">Electrical Measurement</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section7" aria-hidden="true"> <label for="collapse-section7" aria-hidden="false">V1.5.0 / 22-January-2020</label>
+<div>
+<h2 id="main-changes-3">Main Changes</h2>
+<p>Interface:</p>
+<ul>
+<li>Added new commmand SHCI_C2_SetFlashActivityControl() to configure BLE timing protection</li>
+</ul>
+<p>Zigbee:</p>
+<ul>
+<li>Support of the following Zigbee clusters:
+<ul>
+<li>Basic</li>
+<li>On/Off</li>
+<li>Device Temperature Configuration</li>
+<li>Identify</li>
+<li>Power Profile</li>
+<li>Thermostat-UI-Config</li>
+<li>Ballast-Configuration</li>
+<li>Illuminance-Measurement</li>
+<li>Temperature Measurement</li>
+<li>Pressure Measurement</li>
+<li>Occupancy-Sensing</li>
+<li>Messaging</li>
+<li>Meter Identification</li>
+</ul></li>
+</ul>
+<p>BLE-Mesh:</p>
+<ul>
+<li>BLE-Mesh library version 1.12.000
+<ul>
+<li>Embedded Provisioner example added including config-client</li>
+<li>Multi Net Key support has been added(limited to 2 Net Keys)</li>
+<li>Key Refresh updated for Multiple Keys</li>
+<li>Vendor Model updated to add Read and Write messages</li>
+<li>TID check added in the firmware</li>
+<li>Light_LC sensor property updated</li>
+<li>Generic Power OnOff Message updated</li>
+<li>Multi elements support limited to 3</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section6" aria-hidden="true"> <label for="collapse-section6" aria-hidden="true">V1.4.0 / 22-November-2019</label>
+<div>
+<h2 id="main-changes-4">Main Changes</h2>
+<p>Interface:</p>
+<ul>
+<li>Added new commmand SHCI_C2_ExtpaConfig() to support external PA</li>
+<li>Update System and BLE transport layer so that a user event packet is released by default</li>
+</ul>
+<p>BLE:</p>
+<ul>
+<li>Added support to ACI_GATT_READ_EX_EVENT</li>
+<li>Added macro HCI_LE_ADVERTISING_REPORT_RSSI_0(p) to extract properly RSSI from the event packet</li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section5" aria-hidden="true"> <label for="collapse-section5" aria-hidden="true">V1.3.0 / 4-September-2019</label>
+<div>
+<h2 id="main-changes-5">Main Changes</h2>
+<p>General:</p>
+<ul>
+<li>Introducing support of Zigbee</li>
+</ul>
+<p>Interface:</p>
+<ul>
+<li>Cleanup inclusion file dependencies</li>
+<li>Fix local buffer size used in command SHCI_C2_FUS_StoreUsrKey()</li>
+<li>ble user events are now reported one by one (hci_notify_asynch_evt is called for each packet reported)</li>
+<li>system users event are now reported one by one (shci_notify_asynch_evt is called for each packet reported)</li>
+</ul>
+<p>Zigbee:</p>
+<ul>
+<li>First release supporting Zigbee (FFD :Full Function Device)</li>
+<li>Supporting only On/Off Cluster</li>
+</ul>
+<p>BLE-Mesh:</p>
+<ul>
+<li>BLE-Mesh library version 1.10.004
+<ul>
+<li>Light LC Controller state machine for Occupancy detection is implemented</li>
+<li>Light LC Controller state machine for Ambient Lux Level is implemented</li>
+<li>Light LC Server Mode messages added</li>
+<li>Light LC Server Occupancy Mode messages added</li>
+<li>Light LC Server Property messages added</li>
+<li>Save State in NVM controlled by Macro ENABLE_SAVE_MODEL_STATE_NVM</li>
+<li>Mode of Save State in NVM selected by Macro SAVE_MODEL_STATE_FOR_ALL_MESSAGES and SAVE_MODEL_STATE_POWER_FAILURE_DETECTION</li>
+<li>Generic Power OnOff message added</li>
+<li>Generic Power OnOff Setup message added</li>
+<li>Generic Default Transition Time message added</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section4" aria-hidden="true"> <label for="collapse-section4" aria-hidden="true">V1.2.0 / 27-June-2019</label>
+<div>
+<h2 id="main-changes-6">Main Changes</h2>
+<p>General:</p>
+<ul>
+<li>Following utilities : Scheduler and Low Power Manager reworked and moved to “Utilities” directory</li>
+<li>Split tl_if.c into hci_tl_if.c (BLE) and shci_tl_if.c (System) to remove dependencies to the BLE library when the application is built on top of HCI.</li>
+</ul>
+<p>BLE:</p>
+<ul>
+<li>Add 2 new GATT events: aci_gatt_indication_event_rp0 and aci_gatt_notification_event_rp0</li>
+<li>Rework BLE folder architecture to separate the Core from the Services implementation</li>
+<li>Mesh library V1.10.000:
+<ul>
+<li>Sensors Model example updated</li>
+<li>Sensor data publishing updated</li>
+<li>PB-ADV implementation added</li>
+<li>APIs to control frequency of unprovisioned device beacon, secure network beacon, provisioning service advertisement and proxy service advertisement</li>
+<li>Node unprovision on 5 consecutive Power Replug or Reset cycle with duration of each cycle(ON) less than 2 seconds</li>
+<li>SIG Models handling optimized</li>
+<li>printf statement is replaced with TRACE_M(Function name print) and TRACE_I in application code</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section3" aria-hidden="true"> <label for="collapse-section3" aria-hidden="true">V1.1.1 / 10-May-2019</label>
+<div>
+<h2 id="main-changes-7">Main Changes</h2>
+<p>BLE:</p>
+<ul>
+<li>Fix race condition in transport layer when an operating system is used.</li>
+<li>Mesh Library V1.09.000:
+<ul>
+<li>Fix of the BD Address issue.</li>
+<li>Light HSL Model implementation.</li>
+<li>Sensor Server Model Example.</li>
+<li>CID, PID Configuration.</li>
+</ul></li>
+<li>STM32 Cryptographic Library V3.1.1/ 20 April 2018:
+<ul>
+<li>Two new STM32 Cryptographic Libraries provided for IAR Embedded Workbench for ARM (EWARM) Toolchain v8.22:
+<ul>
+<li><strong>STM32CryptographicV3.1.1_CM4_IARv8.a</strong>: First official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High size</em></strong> optimization.</li>
+<li><strong>STM32CryptographicV3.1.1_CM4_IARv8_otnsc.a</strong>: First official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High speed</em></strong> optimization and the option <strong><em>No Size constraints</em></strong> is enabled.</li>
+</ul></li>
+</ul></li>
+<li>STM32 Cryptographic Library V3.0.0/ 05 June 2015:
+<ul>
+<li>Two STM32 Cryptographic Libraries provided for each Development Toolchain:
+<ul>
+<li>IAR Embedded Workbench for ARM (EWARM) toolchain v7.40:
+<ul>
+<li><strong>STM32CryptographicV3.0.0_CM4_IAR.a</strong>: New official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High size</em></strong> optimization.</li>
+<li><strong>STM32CryptographicV3.0.0_CM4_IAR_otnsc.a</strong>: First official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High speed</em></strong> optimization and the option <strong><em>No Size constraints</em></strong> is enabled.</li>
+</ul></li>
+<li>RealView Microcontroller Development Kit (MDK-ARM) toolchain v5.14:
+<ul>
+<li><strong>STM32CryptographicV3.0.0_CM4_KEIL_slsm1elfspf.lib</strong>: New official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High size</em></strong> optimization.</li>
+<li><strong>STM32CryptographicV3.0.0_CM4_KEIL_otslsm1elfspf.lib</strong>: First official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High speed</em></strong> optimization and the option <strong><em>Split Load and Store Multiple</em></strong> and <strong><em>One elf Section per Function</em></strong> are enabled.</li>
+</ul></li>
+<li>Atollic TrueSTUDIO STM32 (TrueSTUDIO) toolchain v5.3.0:
+<ul>
+<li><strong>STM32CryptographicV3.0.0_CM4_GCC.a</strong>: First official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High size</em></strong> optimization.</li>
+<li><strong>STM32CryptographicV3.0.0_CM4_GCC_ot.a</strong>: First official release of optimized STM32 Cryptographic Library for <strong><em>Cortex M4</em></strong> with <strong><em>High speed</em></strong> optimization.</li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section2" aria-hidden="true"> <label for="collapse-section2" aria-hidden="true">V1.1.0 / 29-March-2019</label>
+<div>
+<h2 id="main-changes-8">Main Changes</h2>
+<p>General:</p>
+<ul>
+<li>Licenses in utilities and patterns moved from sla0044 to 3-clauses BSD</li>
+<li>Customer Key Storage APIs</li>
+<li>Get Wireless Coprocessor Firmware information using following API : SHCI_GetWirelessFwInfo()</li>
+</ul>
+<p>BLE:</p>
+<ul>
+<li>New BLE Mesh lib to fix provisioning issue</li>
+</ul>
+<p>Thread:</p>
+<ul>
+<li>802.15.4 radio driver robustness improvement with additional error checks; the application is now notified in case of radio error detected inside the wireless binary</li>
+<li>TxPower management improvement:
+<ul>
+<li>New APIs provided to control the Tx power: otPlatRadioGetTransmitPower() and otPlatRadioSetTransmitPower()</li>
+<li>The default Tx power is now set to 0dBm<br />
+</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section1" aria-hidden="true"> <label for="collapse-section1" aria-hidden="true">V1.0.0 / 31-January-2019</label>
+<div>
+<h2 id="main-changes-9">Main Changes</h2>
+<p>First release</p>
+</div>
+</div>
+<p>For complete documentation on STM32WBxx, visit: [<a href="http://www.st.com/stm32wb">www.st.com/stm32wb</a>]</p>
+</div>
+</div>
+</body>
+</html>
