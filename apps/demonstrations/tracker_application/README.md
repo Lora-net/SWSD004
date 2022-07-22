@@ -143,6 +143,9 @@ LoRa Edge Config app V2 allows user to convert a Modem-E to a LoRa Basics Modem
 
 ![Modem-E to LBM Migration](doc/img/migration.png)
 
+:exclamation: ONLY EU_868 AND US_915 REGIONS ARE SUPPORTED, CONVERSION FROM TRACKERS CONFIGURED IN OTHER REGIONS IS NOT SUPPORTED  !
+| --------------------------------------------------------------------------------------------------------------------------------|
+
 ### Tracker configuration
 
 The application can be configured using 'LoRa Edge™ Config' Android and iOS App running on a compatible smartphone. Communication between the smartphone and the Tracker application uses the Bluetooth Low Energy (BLE) wireless technology. The Tracker application starts advertising at startup and then whenever it detects the presence of a magnet. It stops advertising after 30 seconds when not paired. The timeout value is configured by the `TRACKER_ADV_TIMEOUT_MS` constant.
