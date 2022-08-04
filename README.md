@@ -8,7 +8,7 @@ This project contains a demonstration for a full-feature tracker application, as
 
 | Name                       | Description                                                                              | Documentation                                           |
 | -------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Tracker application        | Tracker demo application running on LoRa Edge Tracher ref design                         | [README](apps/demonstrations/tracker_application/README.md)        |
+| Tracker application        | Tracker demo application running on LoRa Edge Tracker ref design                         | [README](apps/demonstrations/tracker_application/README.md)        |
 | Geolocation - GNSS         | Perform GNSS scans and send results over LoRaWAN using GNSS middleware                   | [README](apps/examples/geolocation_gnss/README.md)      |
 | Geolocation - Wi-Fi        | Perform Wi-Fi scans and send results over LoRaWAN using Wi-Fi middleware                 | [README](apps/examples/geolocation_wifi/README.md)      |
 | Geolocation - GNSS & Wi-Fi | Perform GNSS and Wi-Fi scans and send results over LoRaWAN using geolocation middlewares | [README](apps/examples/geolocation_gnss_wifi/README.md) |
@@ -186,10 +186,10 @@ $ stty -echo raw speed 921600 < /dev/ttyACM0 && cat /dev/ttyACM0
 
 INFO: Modem Initialization
 
-INFO:######  ===== LoRa Basics Modem GNSS Geolocation example (for static objects) ===== ###### 
+INFO:######  ===== LoRa Basics Modem GNSS Geolocation example ===== ###### 
 
 INFO: LoRaWAN version: 01.00.04.01
-INFO: LoRa Basics Modem version: 03.01.07
+INFO: LoRa Basics Modem version: 03.01.08
 INFO: ###### ===== BASICS MODEM RESET EVENT ==== ######
 Reset count : 95
 INFO: Application parameters:
@@ -206,34 +206,3 @@ Region: EU868
 
 INFO: ###### ===== JOINED EVENT ==== ######
 ```
-
-### Known limitations
-
-Two smarpthone applications are available to configure the LoRa Edge Tracker reference design.
-
-The Android Version : https://play.google.com/store/apps/details?id=com.semtech.android.trackerscanner&hl=fr&gl=US
-The iOS Version : https://apps.apple.com/us/app/lora-edge-config/id1584103037
-
-Here is the list of the smartphone which have been validated with LoRa Edge™ Config
-
-| Brand     | Smartphone Model  | OS version  |
-| --------- | ----------------- | ----------- |
-| Apple     | Iphone 12         | iOS 15.5    |
-| Apple     | Iphone 7 Plus     | iOS 14      |
-| Apple     | Iphone SE 1st gen | iOS 15.5    |
-| Apple     | Iphone SE 1st gen | iOS 14.7    |
-| Apple     | Iphone SE 2nd gen | iOS 14.7    |
-| Honor     | 8X                | Android 10  |
-| Samsung   | Galaxy S8         | Android 9   |
-| Samsung   | Galaxy S10e       | Android 9   |
-| Samsung   | Galaxy S21        | Android 12  |
-| LG        | Nexus 5X          | Android 8.1 |
-| Google    | Pixel 4a          | Android 12  |
-| TCL       | A509DL            | Android 11  |
-| Motorola  | G8                | Android 10  |
-| Sony      | XZ1 Compact       | Android 10  |
-| Sony      | XZ2 Compact       | Android 11  |
- 
-
-:exclamation: Minimum operating system for iOS devices is iOS 14
-| ------------------------------------------------------------- |

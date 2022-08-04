@@ -107,8 +107,6 @@
  * --- PRIVATE TYPES -----------------------------------------------------------
  */
 
-
-
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE VARIABLES -------------------------------------------------------
@@ -232,7 +230,7 @@ void hal_rtc_init( void )
 uint32_t hal_rtc_get_time_s( void )
 {
     uint16_t milliseconds_div_10 = 0;
-    
+
     return hal_rtc_get_calendar_time( &milliseconds_div_10 );
 }
 
@@ -246,7 +244,15 @@ uint32_t hal_rtc_get_time_100us( void )
     return seconds * 10000 + milliseconds_div_10;
 }
 
-uint32_t hal_rtc_get_time_ms( void ) { return ( hal_rtc_get_time_100us( ) / 10 ); }
+uint32_t hal_rtc_get_time_ms( void )
+{
+    uint32_t seconds             = 0;
+    uint16_t milliseconds_div_10 = 0;
+
+    seconds = hal_rtc_get_calendar_time( &milliseconds_div_10 );
+
+    return seconds * 1000 + ( milliseconds_div_10 / 10 );
+}
 
 void hal_rtc_stop_alarm( void )
 {
@@ -452,7 +458,7 @@ uint32_t hal_rtc_tick_2_100_us( const uint32_t tick )
     uint32_t seconds    = tick >> N_PREDIV_S;
     uint32_t local_tick = tick & PREDIV_S;
 
-    return ( uint32_t )( ( seconds * 1000 ) + ( ( local_tick * 10000 ) >> N_PREDIV_S ) );
+    return ( uint32_t )( ( seconds * 10000 ) + ( ( local_tick * 10000 ) >> N_PREDIV_S ) );
 }
 
 uint32_t hal_rtc_tick_2_ms( const uint32_t tick )

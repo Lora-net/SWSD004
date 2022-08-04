@@ -192,7 +192,6 @@ void smtc_board_init_periph( void )
     accelerometer_init( INT_1 );
 
     /* Effect Hall sensor */
-    hall_effect_init( HALL_EFFECT_IRQ_ON );
     smtc_board_hall_effect_enable( true );
 }
 
@@ -386,14 +385,18 @@ lr11xx_system_lfclk_cfg_t smtc_board_get_lf_clk( void ) { return LR11XX_SYSTEM_L
 
 void smtc_board_hall_effect_enable( bool enable )
 {
+    SMTC_MODEM_HAL_TRACE_PRINTF( "hall effect sensor enable : %d\n", enable );
+
     if( enable == true )
     {
         smtc_board_vcc_sensors_init( );
         smtc_board_vcc_sensors_on( );
+        hall_effect_init( HALL_EFFECT_IRQ_ON );
     }
     else
     {
         /* Stop Effect hall sensors while tracker is static */
+        hall_effect_deinit( );
         smtc_board_vcc_sensors_off( );
         smtc_board_vcc_sensors_deinit( );
     }

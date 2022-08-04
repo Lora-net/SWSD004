@@ -880,6 +880,9 @@ static void on_modem_reset( uint16_t reset_count )
     }
     else
     {
+        int32_t  voltage_drop          = 0;
+        uint32_t voltage_recovery_time = 0;
+
         smtc_board_set_ready( true );
 
         /* Initialize LoRaWAN parameters */
@@ -887,6 +890,17 @@ static void on_modem_reset( uint16_t reset_count )
 
         /* Start the BLE thread*/
         start_ble_thread( TRACKER_ADV_TIMEOUT_MS );
+
+        /* Check if the batteries are too low, if yes switch the tracker in airplane mode, \note if this test is
+         * moved elsewhere in this app the TRACKER_BOARD_MAX_VOLTAGE_RECOVERY_TIME value should be evaluate again */
+        smtc_board_measure_battery_drop( stack_id, &voltage_drop, &voltage_recovery_time );
+        if( ( voltage_recovery_time > TRACKER_BOARD_MAX_VOLTAGE_RECOVERY_TIME ) &&
+            ( tracker_ctx.accumulated_charge_mAh > ( TRACKER_BOARD_BATTERY_CAPACITY * 0.8 ) ) )
+        {
+            HAL_DBG_TRACE_ERROR( "###### ===== BATTERIES LOW, STAY IN AIRPLANE MODE ==== ######\n\n" );
+            tracker_ctx.airplane_mode = true;
+            smtc_board_leds_blink( smtc_board_get_led_all_mask( ), 500, 5 );
+        }
 
         if( tracker_ctx.airplane_mode == false )
         {
@@ -905,6 +919,9 @@ static void on_modem_reset( uint16_t reset_count )
 
             /* Stop Hall Effect sensors while the tracker is static in airplane mode */
             smtc_board_hall_effect_enable( false );
+
+            /* Reset accelerometer IRQ if any */
+            is_accelerometer_detected_moved( );
         }
     }
 }

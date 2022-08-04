@@ -144,7 +144,7 @@ LoRa Edge Config app V2 allows user to convert a Modem-E to a LoRa Basics Modem
 ![Modem-E to LBM Migration](doc/img/migration.png)
 
 :exclamation: ONLY EU_868 AND US_915 REGIONS ARE SUPPORTED, CONVERSION FROM TRACKERS CONFIGURED IN OTHER REGIONS IS NOT SUPPORTED  !
-| --------------------------------------------------------------------------------------------------------------------------------|
+| ---------------------------------------------------------------------------------------------------------------------------------|
 
 ### Tracker configuration
 
@@ -239,7 +239,7 @@ For instance ( with STM32_Programmer_CLI ):
 ./STM32_Programmer_CLI.exe -c port=SWD -w "PATH\lora-basics-modem-sdk\apps\demonstrations\tracker_application\bin\BLE_Ota.bin" 0x08000000
 ```
 
-The application `tracker_application.bin` is located in `apps/demonstrations/tracker_application/makefile/biuld` folder, 
+The application `tracker_application.bin` is located in `apps/demonstrations/tracker_application/makefile/build` folder, 
 it has to be programmed at the 0x08007000 address
 
 for instance ( with STM32_Programmer_CLI ):
@@ -485,14 +485,21 @@ The yellow component is then called the RX LED and the red component is the TX L
 
 The application uses the LED of the Lora Edge Tracker Reference Design to display the following events:
 
-* application startup: the LEDs blink twice with a 100 ms period.
+* Application startup: the LEDs blink twice with a 100 ms period.
+* Battery depleted: the LEDs blink five times within a 500 ms period.
 * BLE radio connection mode advertising: the TX LED toggle every 100 ms.
 * BLE radio connection mode activity: the TX LED blinks continuously.
-* join process : the LEDs blink twice with a 25 ms period every 3 second. The duration of the event can be configured with the `LED_JOIN_PULSE_MS` and `LED_JOIN_PERIOD_MS` constants.
+* Join process : the LEDs blink twice with a 25 ms period every 3 second. The duration of the event can be configured with the `LED_JOIN_PULSE_MS` and `LED_JOIN_PERIOD_MS` constants.
 * Hall effect sensor interrupt: the RX LED is turned on. The LED is turned off when the interrupt is acknowledged.
 * Middlewares and sensors frame sent: the TX LED flashes once during 100ms. The duration of the event can be configured with the `LED_PERIOD_MS` constant.
-* downlink frame received: the RX LED flashes once during 100ms. The duration of the event can be configured with the `LED_PERIOD_MS` constant.
+* Downlink frame received: the RX LED flashes once during 100ms. The duration of the event can be configured with the `LED_PERIOD_MS` constant.
 
-## Limitation
+## Known Limitation
+
+### Firmware
 
 - The BLE stack doesn't run in parallel of LoRa Basics Modem, the BLE thread runs only at the init of the tracker, once the application leaves the BLE thread and starts the main application it can't return in BLE thread.
+
+### LoRa Edge Config
+
+- Please refer to the [the Wiki](https://github.com/Lora-net/SWSD004/wiki/LoRa-Edge-Config)
