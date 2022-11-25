@@ -112,7 +112,8 @@ void P2PS_STM_App_Notification(P2PS_STM_App_Notification_evt_t *pNotification)
             uint8_t out_buffer[244];
             uint8_t out_buffer_size = 0;
 
-            out_buffer_size = tracker_parse_cmd( 0, pNotification->DataTransfered.pPayload, out_buffer, true );
+            out_buffer_size =
+                tracker_parse_cmd( 0, pNotification->DataTransfered.pPayload, out_buffer, sizeof( out_buffer ), true );
 
             if(out_buffer_size > 0)
             {
@@ -208,7 +209,7 @@ void P2PS_Send_Notification( void )
     if( P2P_Server_App_Context.ReadWrite.ReadyToSend == 0x01 )
     {
         P2P_Server_App_Context.ReadWrite.ReadyToSend = 0;
-        HAL_DBG_TRACE_MSG( "-- P2P APPLICATION SERVER  : INFORM CLIENT ASNWER CMD \n" );
+        HAL_DBG_TRACE_MSG( "-- P2P APPLICATION SERVER  : INFORM CLIENT ANSWER CMD \n" );
         if( P2P_Server_App_Context.Notification_Status == 1 )
         {
             P2PS_STM_App_Update_Char( P2P_NOTIFY_CHAR_UUID, P2P_Server_App_Context.ReadWrite.Buffer,
