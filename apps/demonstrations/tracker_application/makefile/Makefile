@@ -37,9 +37,10 @@ APP_TRACE ?= yes
 MODEM_TRACE ?= no
 MCU_BOARD ?= LR1110TRK1XKS
 RADIO_BOARD ?= LR1110TRK1XKS
-CRYPTO ?= LR11XX_WITH_CREDENTIALS
-MIDDLEWARE ?= yes
 MIDDLEWARE_TRACE ?= no
+USE_LR11XX_CRC_SPI ?= yes
+CRYPTO = LR11XX_WITH_CREDENTIALS
+MIDDLEWARE = yes
 
 TOOLCHAIN_MAKEFILE = $(TOP_DIR)/toolchain/gcc/toolchain.mk
 PROJECTS_COMMON_MAKEFILE = $(TOP_DIR)/apps/common/apps_modem_common.mk
@@ -181,7 +182,7 @@ $(BUILD_DIR)/%.o: %.s Makefile $(PLATFORM_MAKEFILE) | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/$(APP).elf: $(OBJECTS) $(LBM_LIB) Makefile | $(BUILD_DIR)
-	$(CC) $(OBJECTS) $(LBM_LIB) $(LDFLAGS) -o $@
+	$(CC) $(OBJECTS) $(LBM_LIB) $(LDFLAGS),--print-memory-usage -o $@
 	$(SZ) $@
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)

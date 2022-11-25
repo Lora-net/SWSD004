@@ -189,6 +189,11 @@ void hal_mcu_init( void )
     /* Initialize clocks */
     hal_mcu_system_clock_config( );
 
+    // Initialize watchdog
+#if( HAL_USE_WATCHDOG == HAL_FEATURE_ON )
+    hal_watchdog_init( );
+#endif  // HAL_USE_WATCHDOG == HAL_FEATURE_ON
+
     /* Initialize GPIOs */
     hal_mcu_gpio_init( );
 
@@ -217,11 +222,6 @@ void hal_mcu_init( void )
 
     /* Initialize ADC */
     hal_adc_init( );
-
-    // Initialize watchdog
-#if( HAL_USE_WATCHDOG == HAL_FEATURE_ON )
-    hal_watchdog_init( );
-#endif  // HAL_USE_WATCHDOG == HAL_FEATURE_ON
 }
 
 void hal_mcu_reset( void )
@@ -232,7 +232,7 @@ void hal_mcu_reset( void )
 
 void __attribute__( ( optimize( "O0" ) ) ) hal_mcu_wait_us( const int32_t microseconds )
 {
-    const uint32_t nb_nop = microseconds * 1000 / 561;
+    const uint32_t nb_nop = microseconds * 1000 / 363;
     for( uint32_t i = 0; i < nb_nop; i++ )
     {
         __NOP( );
@@ -441,7 +441,8 @@ static void hal_mcu_system_clock_config( void )
     /* Configure the SMPS */
     hal_mcu_smps_config( );
 
-    /* HSE tuning for frequency drift in BLE */
+    /* Set the 32MHz accuracy, by default load capacitance is 12pF, min is 12pF and max is 16pF.
+    Value is Between Min_Data = 0 and Max_Data = 63 ==> 4pF/63 = 0.06pF of step, 55 means load capacitance is 15.5pF */
     LL_RCC_HSE_SetCapacitorTuning( 55 );
 
     hal_mcu_system_clock_forward_LSE( true );
@@ -475,9 +476,9 @@ static void hal_mcu_smps_config( void )
 
 static void hal_mcu_pvd_config( void )
 {
-    PWR_PVDTypeDef sConfigPVD;
-    sConfigPVD.PVDLevel = PWR_PVDLEVEL_1;
-    sConfigPVD.Mode     = PWR_PVD_MODE_IT_RISING;
+    PWR_PVDTypeDef sConfigPVD = { 0 };
+    sConfigPVD.PVDLevel       = PWR_PVDLEVEL_1;
+    sConfigPVD.Mode           = PWR_PVD_MODE_IT_RISING;
     if( HAL_PWR_ConfigPVD( &sConfigPVD ) != HAL_OK )
     {
         assert_param( FAIL );

@@ -92,7 +92,6 @@ typedef enum low_power_mode_e
 
 static volatile bool             exit_wait            = false;
 static volatile low_power_mode_t lp_current_mode      = LOW_POWER_ENABLE;
-static bool                      partial_sleep_enable = false;
 
 /*
  * -----------------------------------------------------------------------------
@@ -352,8 +351,6 @@ void HAL_MspInit( void )
     HAL_NVIC_SetPriority( SysTick_IRQn, 0, 0 );
 }
 
-void hal_mcu_partial_sleep_enable( bool enable ) { partial_sleep_enable = enable; }
-
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
@@ -555,12 +552,7 @@ static void hal_mcu_system_clock_re_config_after_stop( void )
  */
 static void hal_mcu_lpm_enter_sleep_mode( void )
 {
-    // Deinit periph & enter Stop Mode
-    if( partial_sleep_enable != true )
-    {
-        smtc_board_deinit_periph( );
-    }
-
+    // Deinit mcu & enter Stop Mode
 #if( HAL_LOW_POWER_MODE == HAL_FEATURE_ON )
     if( lp_current_mode == LOW_POWER_ENABLE )
     {
@@ -587,12 +579,6 @@ static void hal_mcu_lpm_exit_sleep_mode( void )
         hal_mcu_lpm_mcu_reinit( );
     }
 #endif
-
-    if( partial_sleep_enable == false )
-    {
-        // Reinitializes the peripherals
-        smtc_board_reinit_periph( );
-    }
 }
 
 /**

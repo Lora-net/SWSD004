@@ -68,9 +68,42 @@
         MW_DBG_TRACE_PRINTF( __VA_ARGS__ ); \
     } while( 0 )
 
+#define GNSS_QUEUE_PRINT( queue )                                                                     \
+    {                                                                                                 \
+        GNSS_QUEUE_TRACE_PRINTF( "****************************************\n" );                      \
+        GNSS_QUEUE_TRACE_PRINTF( "token:       0x%02X\n", queue->token );                             \
+        GNSS_QUEUE_TRACE_PRINTF( "group_size:  %d\n", queue->scan_group_size );                       \
+        GNSS_QUEUE_TRACE_PRINTF( "scan_valid:  %d\n", queue->nb_scans_valid );                        \
+        GNSS_QUEUE_TRACE_PRINTF( "scan_total:  %d\n", queue->nb_scans_total );                        \
+        GNSS_QUEUE_TRACE_PRINTF( "scan_sent:   %d\n", queue->nb_scans_sent );                         \
+        GNSS_QUEUE_TRACE_PRINTF( "abort:       %d\n", queue->abort );                                 \
+        if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )                                             \
+        {                                                                                             \
+            GNSS_QUEUE_TRACE_PRINTF( "mode:        DEFAULT\n" );                                      \
+            GNSS_QUEUE_TRACE_PRINTF( "min_sv:      %d\n", queue->nb_svs_threshold );                  \
+        }                                                                                             \
+        else                                                                                          \
+        {                                                                                             \
+            GNSS_QUEUE_TRACE_PRINTF( "mode:        SENSITIVITY\n" );                                  \
+        }                                                                                             \
+        GNSS_QUEUE_TRACE_PRINTF( "power_cons:  %d uah\n", queue->power_consumption_uah );             \
+        for( uint8_t i = 0; i < queue->nb_scans_valid; i++ )                                          \
+        {                                                                                             \
+            GNSS_QUEUE_TRACE_PRINTF( "scans[%d]: %02d %02d %02d - ", i, queue->scans[i].detected_svs, \
+                                     queue->scans[i].results_size, queue->scans[i].nav_valid );       \
+            for( uint8_t j = 0; j < ( GNSS_SCAN_METADATA_SIZE + queue->scans[i].results_size ); j++ ) \
+            {                                                                                         \
+                GNSS_QUEUE_TRACE_PRINTF( "%02X ", queue->scans[i].results_buffer[j] );                \
+            }                                                                                         \
+            GNSS_QUEUE_TRACE_PRINTF( "\n" );                                                          \
+        }                                                                                             \
+        GNSS_QUEUE_TRACE_PRINTF( "****************************************\n" );                      \
+    }
+
 #else
 #define GNSS_QUEUE_TRACE_MSG( msg )
 #define GNSS_QUEUE_TRACE_PRINTF( ... )
+#define GNSS_QUEUE_PRINT( queue )
 #endif
 
 /*
@@ -115,7 +148,7 @@ void gnss_scan_group_queue_increment_token( gnss_scan_group_queue_t* queue )
 }
 
 bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_group_size, gnss_scan_group_mode_t mode,
-                                uint8_t nb_sv_threshold )
+                                uint8_t nb_svs_threshold )
 {
     if( ( queue != NULL ) && ( scan_group_size <= GNSS_SCAN_GROUP_SIZE_MAX ) )
     {
@@ -124,26 +157,26 @@ bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_gro
         queue->mode            = mode;
         if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )
         {
-            queue->nb_sv_threshold = nb_sv_threshold;
+            queue->nb_svs_threshold = nb_svs_threshold;
         }
         else
         {
             /* in SENSITIVITY mode, a scan is valid if there is more that 0 SV detected */
-            queue->nb_sv_threshold = 1;
+            queue->nb_svs_threshold = 1;
         }
 
         /* reset queue current status */
-        queue->nb_scan_valid         = 0;
-        queue->nb_scan_total         = 0;
-        queue->nb_scan_sent          = 0;
+        queue->nb_scans_valid        = 0;
+        queue->nb_scans_total        = 0;
+        queue->nb_scans_sent         = 0;
         queue->power_consumption_uah = 0;
         queue->abort                 = false;
 
         /* reset queue buffers */
-        memset( queue->scan, 0, sizeof queue->scan );
+        memset( queue->scans, 0, sizeof queue->scans );
 
         GNSS_QUEUE_TRACE_PRINTF( "%s:\n", __FUNCTION__ );
-        gnss_scan_group_queue_print( queue );
+        GNSS_QUEUE_PRINT( queue );
 
         return true;
     }
@@ -159,7 +192,7 @@ bool gnss_scan_group_queue_is_full( gnss_scan_group_queue_t* queue )
         */
     if( queue != NULL )
     {
-        return ( ( queue->abort == true ) || ( queue->nb_scan_total == queue->scan_group_size ) );
+        return ( ( queue->abort == true ) || ( queue->nb_scans_total == queue->scan_group_size ) );
     }
 
     return false;
@@ -172,12 +205,12 @@ bool gnss_scan_group_queue_is_valid( gnss_scan_group_queue_t* queue )
         if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )
         {
             /* All scans of the group have been done, and all are valid */
-            return ( queue->nb_scan_valid == queue->scan_group_size );
+            return ( queue->nb_scans_valid == queue->scan_group_size );
         }
         else /* GNSS_SCAN_GROUP_MODE_SENSITIVITY */
         {
-            if( ( ( queue->nb_scan_valid == 1 ) && ( queue->scan[0].nav_valid == true ) ) ||
-                ( queue->nb_scan_valid > 1 ) )
+            if( ( ( queue->nb_scans_valid == 1 ) && ( queue->scans[0].nav_valid == true ) ) ||
+                ( queue->nb_scans_valid > 1 ) )
             {
                 return true;
             }
@@ -196,10 +229,10 @@ void gnss_scan_group_queue_push( gnss_scan_group_queue_t* queue, gnss_scan_t* sc
     if( ( queue != NULL ) && ( scan != NULL ) )
     {
         /* Add the scan to the queue if valid */
-        if( scan->detected_sv >= ( queue->nb_sv_threshold ) ) /* nb_sv_threshold set to 1 in HIGH_SENSITIVITY mode */
+        if( scan->detected_svs >= ( queue->nb_svs_threshold ) ) /* nb_sv_threshold set to 1 in HIGH_SENSITIVITY mode */
         {
-            memcpy( &( queue->scan[queue->nb_scan_valid] ), scan, sizeof( gnss_scan_t ) );
-            queue->nb_scan_valid += 1;
+            memcpy( &( queue->scans[queue->nb_scans_valid] ), scan, sizeof( gnss_scan_t ) );
+            queue->nb_scans_valid += 1;
         }
         else
         {
@@ -211,37 +244,37 @@ void gnss_scan_group_queue_push( gnss_scan_group_queue_t* queue, gnss_scan_t* sc
             }
         }
 
-        queue->nb_scan_total += 1;
+        queue->nb_scans_total += 1;
 
         GNSS_QUEUE_TRACE_PRINTF( "%s:\n", __FUNCTION__ );
-        gnss_scan_group_queue_print( queue );
+        GNSS_QUEUE_PRINT( queue );
     }
 }
 
 bool gnss_scan_group_queue_pop( gnss_scan_group_queue_t* queue, uint8_t** buffer, uint8_t* buffer_size )
 {
     if( ( queue != NULL ) && gnss_scan_group_queue_is_valid( queue ) &&
-        ( queue->nb_scan_sent < queue->nb_scan_valid ) && ( queue->abort == false ) )
+        ( queue->nb_scans_sent < queue->nb_scans_valid ) && ( queue->abort == false ) )
     {
-        const uint8_t index   = queue->nb_scan_sent;
-        const uint8_t is_last = ( queue->nb_scan_sent == ( queue->nb_scan_valid - 1 ) );
+        const uint8_t index   = queue->nb_scans_sent;
+        const uint8_t is_last = ( queue->nb_scans_sent == ( queue->nb_scans_valid - 1 ) );
 
         /* Set scan group metadata
-            | last NAV (1b) | token (7b) |
+            | last NAV (1bit) | token (7bits) |
             - token: scan group identifier
             - last NAV: indicates if this is the last NAV message of a scan group
         */
-        queue->scan[index].results_buffer[0] = ( is_last << 7 ) | ( queue->token & 0x7F );
+        queue->scans[index].results_buffer[0] = ( is_last << 7 ) | ( queue->token & 0x7F );
 
         /* Update queue info */
-        queue->nb_scan_sent += 1;
+        queue->nb_scans_sent += 1;
 
         /* Return a pointer to the buffer to be sent, and its size */
-        *buffer      = queue->scan[index].results_buffer;
-        *buffer_size = GNSS_SCAN_METADATA_SIZE + queue->scan[index].results_size;
+        *buffer      = queue->scans[index].results_buffer;
+        *buffer_size = GNSS_SCAN_METADATA_SIZE + queue->scans[index].results_size;
 
         GNSS_QUEUE_TRACE_PRINTF( "%s:\n", __FUNCTION__ );
-        gnss_scan_group_queue_print( queue );
+        GNSS_QUEUE_PRINT( queue );
 
         return true;
     }
@@ -252,38 +285,6 @@ bool gnss_scan_group_queue_pop( gnss_scan_group_queue_t* queue, uint8_t** buffer
     GNSS_QUEUE_TRACE_PRINTF( "%s: no scan result left in queue\n", __FUNCTION__ );
 
     return false;
-}
-
-void gnss_scan_group_queue_print( gnss_scan_group_queue_t* queue )
-{
-    GNSS_QUEUE_TRACE_PRINTF( "****************************************\n" );
-    GNSS_QUEUE_TRACE_PRINTF( "token:       0x%02X\n", queue->token );
-    GNSS_QUEUE_TRACE_PRINTF( "group_size:  %d\n", queue->scan_group_size );
-    GNSS_QUEUE_TRACE_PRINTF( "scan_valid:  %d\n", queue->nb_scan_valid );
-    GNSS_QUEUE_TRACE_PRINTF( "scan_total:  %d\n", queue->nb_scan_total );
-    GNSS_QUEUE_TRACE_PRINTF( "scan_sent:   %d\n", queue->nb_scan_sent );
-    GNSS_QUEUE_TRACE_PRINTF( "abort:       %d\n", queue->abort );
-    if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )
-    {
-        GNSS_QUEUE_TRACE_PRINTF( "mode:        DEFAULT\n" );
-        GNSS_QUEUE_TRACE_PRINTF( "min_sv:      %d\n", queue->nb_sv_threshold );
-    }
-    else
-    {
-        GNSS_QUEUE_TRACE_PRINTF( "mode:        SENSITIVITY\n" );
-    }
-    GNSS_QUEUE_TRACE_PRINTF( "power_cons:  %d uah\n", queue->power_consumption_uah );
-    for( uint8_t i = 0; i < queue->nb_scan_valid; i++ )
-    {
-        GNSS_QUEUE_TRACE_PRINTF( "scan[%d]: %02d %02d %02d - ", i, queue->scan[i].detected_sv,
-                                 queue->scan[i].results_size, queue->scan[i].nav_valid );
-        for( uint8_t j = 0; j < ( GNSS_SCAN_METADATA_SIZE + queue->scan[i].results_size ); j++ )
-        {
-            GNSS_QUEUE_TRACE_PRINTF( "%02X ", queue->scan[i].results_buffer[j] );
-        }
-        GNSS_QUEUE_TRACE_PRINTF( "\n" );
-    }
-    GNSS_QUEUE_TRACE_PRINTF( "****************************************\n" );
 }
 
 /*

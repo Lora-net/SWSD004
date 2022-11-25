@@ -60,20 +60,20 @@ extern "C" {
  * @brief Defines the application mobile scan interval
  * when device has moved, 120s (2 min), value in [s].
  */
-#define MOBILE_SCAN_INTERVAL 120
+#define MOBILE_SCAN_INTERVAL_DEFAULT 120
 
 /*!
  * @brief Defines the application static scan interval
  * when device doesn't move, 6 hours, 21600 seconds, value in [s].
  */
-#define STATIC_SCAN_INTERVAL 21600
+#define STATIC_SCAN_INTERVAL_DEFAULT 21600
 
 /**
  * @brief Duration in second after last ALC sync response received to consider the local clock time invalid
  *
- * Set time valid for 3 day (to be fine tuned depending on board properties)
+ * Set time valid for 7 day (to be fine tuned depending on board properties)
  */
-#define APP_ALC_TIMING_INVALID ( APP_ALC_TIMING_INTERVAL * 3 )
+#define APP_ALC_TIMING_INVALID ( APP_ALC_TIMING_INTERVAL * 7 )
 
 /**
  * @brief Interval in second between two consecutive ALC sync requests
@@ -110,16 +110,11 @@ extern "C" {
 #define TRACKER_BOARD_MAX_VOLTAGE_RECOVERY_TIME 6000
 
 /*!
- * @brief Define the battery capacity in mAh.
- */
-#define TRACKER_BOARD_BATTERY_CAPACITY 2400
-
-/*!
  * @brief Defines the application firmware version
  */
 #define TRACKER_MAJOR_APP_VERSION 2
-#define TRACKER_MINOR_APP_VERSION 0
-#define TRACKER_SUB_MINOR_APP_VERSION 8
+#define TRACKER_MINOR_APP_VERSION 1
+#define TRACKER_SUB_MINOR_APP_VERSION 1
 
 #define TRACKER_PCB_HW_NUMBER 595
 #define TRACKER_MAJOR_PCB_HW_VERSION 1

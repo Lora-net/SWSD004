@@ -41,8 +41,10 @@
 #include <stdbool.h>  // bool type
 
 #include "ral_lr11xx_bsp.h"
-#include "smtc_hal_mcu.h"
+#include "smtc_hal.h"
 #include "smtc_modem_api.h"
+#include "smtc_board.h"
+#include "lr1110_trk1xks_board.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -54,10 +56,219 @@
  * --- PRIVATE CONSTANTS -------------------------------------------------------
  */
 
+#define LR11XX_PA_HP_LF_CFG_TABLE           \
+{                                           \
+    {                                       \
+        /* Expected output power = -9dBm */ \
+        .power         = 8,                 \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -8dBm */ \
+        .power         = 9,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -7dBm */ \
+        .power         = 11,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -6dBm */ \
+        .power         = 12,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -5dBm */ \
+        .power         = 13,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -4dBm */ \
+        .power         = 17,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -3dBm */ \
+        .power         = 15,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -2dBm */ \
+        .power         = 15,                \
+        .pa_duty_cycle = 0x02,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = -1dBm */ \
+        .power         = 15,                \
+        .pa_duty_cycle = 0x03,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 0dBm */  \
+        .power         = 11,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 1dBm */  \
+        .power         = 13,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 2dBm */  \
+        .power         = 13,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 3dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 4dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 5dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x02,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 6dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x03,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 7dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x04,              \
+        .pa_hp_sel     = 0x00,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 8dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 9dBm */  \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 10dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 11dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x02,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 12dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x03,              \
+        .pa_hp_sel     = 0x01,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 13dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x00,              \
+        .pa_hp_sel     = 0x03,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 14dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x03,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 15dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x04,              \
+        .pa_hp_sel     = 0x02,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 16dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x04,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 17dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x02,              \
+        .pa_hp_sel     = 0x04,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 18dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x01,              \
+        .pa_hp_sel     = 0x06,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 19dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x03,              \
+        .pa_hp_sel     = 0x05,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 20dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x03,              \
+        .pa_hp_sel     = 0x07,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 21dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x04,              \
+        .pa_hp_sel     = 0x06,              \
+    },                                      \
+    {                                       \
+        /* Expected output power = 22dBm */ \
+        .power         = 22,                \
+        .pa_duty_cycle = 0x04,              \
+        .pa_hp_sel     = 0x07,              \
+    },                                      \
+}
+
+#define LR11XX_PWR_VREG_VBAT_SWITCH 2
+#define LR11XX_MIN_PWR_HP_LF -9
+#define LR11XX_MAX_PWR_HP_LF 22
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE TYPES -----------------------------------------------------------
  */
+
+typedef struct lr11xx_pa_pwr_cfg_s
+{
+    int8_t  power;
+    uint8_t pa_duty_cycle;
+    uint8_t pa_hp_sel;
+} lr11xx_pa_pwr_cfg_t;
+
+const lr11xx_pa_pwr_cfg_t pa_hp_cfg_table[LR11XX_MAX_PWR_HP_LF - LR11XX_MIN_PWR_HP_LF + 1] = LR11XX_PA_HP_LF_CFG_TABLE;
 
 /*
  * -----------------------------------------------------------------------------
@@ -69,6 +280,14 @@
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
  */
 
+/**
+ * @brief Get the tx output param configuration given the type of power amplifier and expected output power
+ *
+ * @param [in] expected_output_pwr_in_dbm TX output power in dBm
+ * @param [out] output_params The tx config output params
+ */
+void lr11xx_get_tx_cfg( int8_t expected_output_pwr_in_dbm, ral_lr11xx_bsp_tx_cfg_output_params_t* output_params );
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
@@ -76,7 +295,7 @@
 
 void ral_lr11xx_bsp_get_rf_switch_cfg( const void* context, lr11xx_system_rfswitch_cfg_t* rf_switch_cfg )
 {
-    rf_switch_cfg->enable =  LR11XX_SYSTEM_RFSW0_HIGH | LR11XX_SYSTEM_RFSW1_HIGH;
+    rf_switch_cfg->enable  = LR11XX_SYSTEM_RFSW0_HIGH | LR11XX_SYSTEM_RFSW1_HIGH;
     rf_switch_cfg->standby = 0;
     rf_switch_cfg->rx      = LR11XX_SYSTEM_RFSW1_HIGH;
     rf_switch_cfg->tx      = LR11XX_SYSTEM_RFSW0_HIGH | LR11XX_SYSTEM_RFSW1_HIGH;
@@ -89,33 +308,10 @@ void ral_lr11xx_bsp_get_rf_switch_cfg( const void* context, lr11xx_system_rfswit
 void ral_lr11xx_bsp_get_tx_cfg( const void* context, const ral_lr11xx_bsp_tx_cfg_input_params_t* input_params,
                                 ral_lr11xx_bsp_tx_cfg_output_params_t* output_params )
 {
-    int8_t modem_tx_offset;
+    int16_t power = input_params->system_output_pwr_in_dbm + smtc_board_get_tx_power_offset( );
 
-    // get modem_configured tx power offset
-    if( smtc_modem_get_tx_power_offset_db( 0, &modem_tx_offset ) != SMTC_MODEM_RC_OK )
-    {
-        // in case rc code is not RC_OK, this function will not return the offset and we need to use no offset (in test
-        // mode for example)
-        modem_tx_offset = 0;
-    }
-
-    int16_t power = input_params->system_output_pwr_in_dbm + modem_tx_offset;
-
-    // The output power must be in range [ -9 , +22 ] dBm
-    if( power < -9 )
-    {
-        power = -9;
-    }
-
-    output_params->pa_cfg.pa_duty_cycle = 4;
-    output_params->pa_cfg.pa_hp_sel     = 7;
-    output_params->pa_cfg.pa_reg_supply = LR11XX_RADIO_PA_REG_SUPPLY_VBAT;
-    output_params->pa_cfg.pa_sel        = LR11XX_RADIO_PA_SEL_HP;
-
-    output_params->chip_output_pwr_in_dbm_configured = ( int8_t ) power;
-    output_params->chip_output_pwr_in_dbm_expected   = ( int8_t ) power;
-
-    output_params->pa_ramp_time = LR11XX_RADIO_RAMP_48_US;
+    /* call the configuration function */
+    lr11xx_get_tx_cfg( power, output_params );
 }
 
 void ral_lr11xx_bsp_get_reg_mode( const void* context, lr11xx_system_reg_mode_t* reg_mode )
@@ -170,6 +366,54 @@ void ral_lr11xx_bsp_get_rssi_calibration_table( const void* context, const uint3
     rssi_calibration_table->gain_tune.g12    = 6;
     rssi_calibration_table->gain_tune.g13    = 7;
     rssi_calibration_table->gain_tune.g13hp7 = 6;
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
+ */
+
+void lr11xx_get_tx_cfg( int8_t expected_output_pwr_in_dbm, ral_lr11xx_bsp_tx_cfg_output_params_t* output_params )
+{
+    int8_t power                  = expected_output_pwr_in_dbm;
+    int8_t max_tx_power_supported = 0;
+
+    max_tx_power_supported = smtc_board_get_max_tx_power_supported( );
+
+    /* Clamp the tx power value if any */
+    if( power > max_tx_power_supported )
+    {
+        power = max_tx_power_supported;
+    }
+
+    // Ramp time is the same for any config
+    output_params->pa_ramp_time = LR11XX_RADIO_RAMP_48_US;
+
+    // Check power boundaries for HP LF PA: The output power must be in range [ -9 , +22 ] dBm
+    if( power < LR11XX_MIN_PWR_HP_LF )
+    {
+        power = LR11XX_MIN_PWR_HP_LF;
+    }
+    else if( power > LR11XX_MAX_PWR_HP_LF )
+    {
+        power = LR11XX_MAX_PWR_HP_LF;
+    }
+    output_params->pa_cfg.pa_sel                   = LR11XX_RADIO_PA_SEL_HP;
+    output_params->chip_output_pwr_in_dbm_expected = power;
+
+    if( power <= LR11XX_PWR_VREG_VBAT_SWITCH )
+    {
+        // For powers below 8dBm use regulated supply for HP PA for a better efficiency.
+        output_params->pa_cfg.pa_reg_supply = LR11XX_RADIO_PA_REG_SUPPLY_VREG;
+    }
+    else
+    {
+        output_params->pa_cfg.pa_reg_supply = LR11XX_RADIO_PA_REG_SUPPLY_VBAT;
+    }
+
+    output_params->pa_cfg.pa_duty_cycle              = pa_hp_cfg_table[power - LR11XX_MIN_PWR_HP_LF].pa_duty_cycle;
+    output_params->pa_cfg.pa_hp_sel                  = pa_hp_cfg_table[power - LR11XX_MIN_PWR_HP_LF].pa_hp_sel;
+    output_params->chip_output_pwr_in_dbm_configured = pa_hp_cfg_table[power - LR11XX_MIN_PWR_HP_LF].power;
 }
 
 /* --- EOF ------------------------------------------------------------------ */

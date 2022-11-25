@@ -26,12 +26,31 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+ifneq (,$(findstring LR1110,$(RADIO_BOARD)))
+RADIO = lr1110
+else ifneq (,$(findstring LR1120,$(RADIO_BOARD)))
+RADIO = lr1120
+else
+$(error Invalid platform board, please select a supported platform board)
+endif
+
+SMTC_SHIELD_LR11XX_DIR = $(TOP_DIR)/shields/LR11XX
+SMTC_SHIELD_LR11XX = $(RADIO_BOARD)
+
+include $(TOP_DIR)/shields/LR11XX/smtc_shield_lr11xx/smtc_shield_lr11xx.mk
+
 C_SOURCES +=  \
-$(TOP_DIR)/shields/LR11XX/radio_drivers_hal/lr11xx_hal.c
+$(TOP_DIR)/shields/LR11XX/radio_drivers_hal/lr11xx_hal.c \
+$(TOP_DIR)/shields/LR11XX/common/src/ral_lr11xx_bsp.c \
+$(TOP_DIR)/shields/LR11XX/common/src/smtc_board_lr11xx.c \
+
+ifeq ($(MIDDLEWARE),yes)
+C_SOURCES +=  \
+$(TOP_DIR)/shields/LR11XX/smtc_shield_lr11xx/common/src/mw_bsp.c
+endif
 
 C_INCLUDES +=  \
-    -I$(LORA_BASICS_MODEM)/smtc_modem_core/radio_drivers/lr11xx_driver/src \
-    -I$(LORA_BASICS_MODEM)/smtc_modem_core/smtc_ralf/src \
-    -I$(LORA_BASICS_MODEM)/smtc_modem_core/smtc_ral/src \
-    -I$(TOP_DIR)/shields/LR11XX/radio_drivers_hal \
-    -I$(TOP_DIR)/shields/LR11XX/smtc_lr11xx_board
+-I$(LORA_BASICS_MODEM)/smtc_modem_core/radio_drivers/lr11xx_driver/src \
+-I$(TOP_DIR)/shields/LR11XX/common/inc \
+-I$(TOP_DIR)/shields/LR11XX/radio_drivers_hal \
+-I$(TOP_DIR)/shields/LR11XX/smtc_lr11xx_board \

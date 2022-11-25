@@ -112,7 +112,7 @@ static hal_uart_t hal_uart[] = {
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-uint8_t uart_rx_done = false;
+static volatile uint8_t uart_rx_done = false;
 
 /*
  * -----------------------------------------------------------------------------

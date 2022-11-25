@@ -323,20 +323,20 @@ void i2c_set_addr_size( i2c_addr_size addr_size ) { i2c_internal_addr_size = add
 static uint8_t i2c_write_buffer( const uint32_t id, uint8_t device_addr, uint16_t addr, uint8_t* buffer, uint16_t size )
 {
     uint8_t  write_status = SMTC_HAL_FAILURE;
-    uint16_t memAddSize   = 0u;
+    uint16_t mem_add_size = 0u;
 
     assert_param( ( id > 0 ) && ( ( id - 1 ) < sizeof( hal_i2c ) ) );
     uint32_t local_id = id - 1;
 
     if( i2c_internal_addr_size == I2C_ADDR_SIZE_8 )
     {
-        memAddSize = I2C_MEMADD_SIZE_8BIT;
+        mem_add_size = I2C_MEMADD_SIZE_8BIT;
     }
     else
     {
-        memAddSize = I2C_MEMADD_SIZE_16BIT;
+        mem_add_size = I2C_MEMADD_SIZE_16BIT;
     }
-    if( HAL_I2C_Mem_Write( &hal_i2c[local_id].handle, device_addr, addr, memAddSize, buffer, size, 2000u ) == HAL_OK )
+    if( HAL_I2C_Mem_Write( &hal_i2c[local_id].handle, device_addr, addr, mem_add_size, buffer, size, 2000u ) == HAL_OK )
     {
         write_status = SMTC_HAL_SUCCESS;
     }
@@ -345,24 +345,24 @@ static uint8_t i2c_write_buffer( const uint32_t id, uint8_t device_addr, uint16_
 
 static uint8_t i2c_read_buffer( const uint32_t id, uint8_t device_addr, uint16_t addr, uint8_t* buffer, uint16_t size )
 {
-    uint8_t  readStatus = SMTC_HAL_FAILURE;
-    uint16_t memAddSize = 0u;
+    uint8_t  read_status  = SMTC_HAL_FAILURE;
+    uint16_t mem_add_size = 0u;
 
     assert_param( ( id > 0 ) && ( ( id - 1 ) < sizeof( hal_i2c ) ) );
     uint32_t local_id = id - 1;
 
     if( i2c_internal_addr_size == I2C_ADDR_SIZE_8 )
     {
-        memAddSize = I2C_MEMADD_SIZE_8BIT;
+        mem_add_size = I2C_MEMADD_SIZE_8BIT;
     }
     else
     {
-        memAddSize = I2C_MEMADD_SIZE_16BIT;
+        mem_add_size = I2C_MEMADD_SIZE_16BIT;
     }
-    if( HAL_I2C_Mem_Read( &hal_i2c[local_id].handle, device_addr, addr, memAddSize, buffer, size, 2000 ) == HAL_OK )
+    if( HAL_I2C_Mem_Read( &hal_i2c[local_id].handle, device_addr, addr, mem_add_size, buffer, size, 2000 ) == HAL_OK )
     {
-        readStatus = SMTC_HAL_SUCCESS;
+        read_status = SMTC_HAL_SUCCESS;
     }
 
-    return readStatus;
+    return read_status;
 }

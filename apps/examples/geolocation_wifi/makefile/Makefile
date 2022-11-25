@@ -36,7 +36,7 @@ APP = geolocation_wifi
 APP_TRACE ?= yes
 MODEM_TRACE ?= yes
 MCU_BOARD ?= NUCLEO_L476RG
-RADIO_BOARD ?= LR1110MB1LXKS
+RADIO_BOARD ?= LR1110MB1DJS
 MIDDLEWARE = yes
 MIDDLEWARE_TRACE ?= yes
 
@@ -48,7 +48,7 @@ SHIELD_MAKEFILE = $(TOP_DIR)/shields/radio_shield.mk
 # building variables
 ######################################
 # debug build?
-DEBUG ?= 1
+DEBUG ?= yes
 # optimization
 OPT ?= -O0
 

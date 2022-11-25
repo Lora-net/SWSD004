@@ -108,6 +108,18 @@
 
 #define FLASH_USER_MODEME_TRACKER_REGION_OFFSET ( 69 )
 
+#define TRACKER_CONTEXT_SIZE 128
+#define INTERNAL_LOG_CONTEXT_SIZE 32
+#define INTERNAL_LOG_SCAN_BUFFER 256
+
+/*!
+ * @brief Tracker parameter limits
+ */
+#define MOBILE_SCAN_INTERVAL_MIN 120
+#define MOBILE_SCAN_INTERVAL_MAX 1800
+#define STATIC_SCAN_INTERVAL_MIN 600
+#define STATIC_SCAN_INTERVAL_MAX 86400
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE TYPES -----------------------------------------------------------
@@ -176,10 +188,11 @@ static void tracker_print_device_settings( void );
 /*!
  * @brief Get the tracker settings in order to send over BLE
  *
- * @param [out] buffer buffer where is stored the scan
- * @param [out] buffer_len length of the scan stored into the buffer
+ * @param [out] out_buffer Buffer where is stored the scan
+ * @param [in] out_buffer_len Len of the buffer where is stored the scan
+ * @param [out] buffer_len Length of the scan stored into the buffer
  */
-static void tracker_get_device_settings( uint8_t* buffer, uint16_t* buffer_len );
+static void tracker_get_device_settings( uint8_t* out_buffer, const uint16_t out_buffer_len, uint16_t* buffer_len );
 
 /*!
  *@brief Read 4 bytes from array buffer at index and interpret it as uint32_t LSB. Increment index so that
@@ -198,7 +211,7 @@ static uint32_t get_uint32_from_array_at_index_and_inc( const uint8_t* array, ui
  * @param [in] nb_variable_elements number of element to store
  * @param [in] len length of the buffer
  */
-static void tracker_store_internal_log( uint8_t* buffer, uint8_t nb_variable_elements, uint8_t len );
+static void tracker_store_internal_log( uint8_t* buffer, uint8_t nb_variable_elements, uint16_t len );
 
 /*!
  * @brief return the user memory flash remaning space.
@@ -216,20 +229,22 @@ static void tracker_store_internal_log_ctx( void );
  * @brief Restore the internal log of one given scan_number from the flash memory.
  *
  * @param [in] scan_number number of the scan to get
- * @param [out] buffer buffer where is stored the scan
+ * @param [out] out_buffer buffer where is stored the scan
+ * @param [in] out_buffer_len buffer len where is stored the scan
  * @param [out] buffer_len length of the scan stored into the buffer
  */
-static void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buffer, uint16_t* buffer_len );
+static void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* out_buffer,
+                                                    const uint16_t out_buffer_len, uint16_t* buffer_len );
 
 /*!
  * @brief Erase the scan results and the internal log context from the flash memory
  */
-void tracker_erase_internal_log( void );
+static void tracker_erase_internal_log( void );
 
 /*!
  * @brief Erase full user memory flash between end of the app and the contexts area
  */
-void tracker_erase_full_user_flash_memory( void );
+static void tracker_erase_full_user_flash_memory( void );
 
 /*!
  * @brief Check if a LoRaWAN region is already existing on the Modem-E tracker memory flash
@@ -238,7 +253,25 @@ void tracker_erase_full_user_flash_memory( void );
  *
  * @returns true is a region is existing, false otherwise
  */
-bool tracker_check_for_existing_region( uint8_t* existing_region );
+static bool tracker_check_for_existing_region( uint8_t* existing_region );
+
+/*!
+ * @brief Get the oldest and the newest almanac date from the LR11XX
+ *
+ * @param [in] context Radio abstraction
+ * @param [out] oldest_almanac_date oldest sv date
+ * @param [out] newest_almanac_date newest sv date
+ *
+ * @return true if almanacs dates have been recovered, false if not
+ */
+static bool smtc_board_get_almanac_dates( const void* context, uint32_t* oldest_almanac_date,
+                                          uint32_t* newest_almanac_date );
+
+/*!
+ * @brief Check the validity of the tracker parameters, if a paramater is out of bound, it's reinitialized to his
+ * default value.
+ */
+static void tracker_check_app_ctx( void );
 
 /*
  * -----------------------------------------------------------------------------
@@ -247,8 +280,8 @@ bool tracker_check_for_existing_region( uint8_t* existing_region );
 
 tracker_return_status_t tracker_init_internal_log_ctx( void )
 {
-    uint8_t ctx_buf[32];
-    hal_flash_read_buffer( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, ctx_buf, 32 );
+    uint8_t ctx_buf[INTERNAL_LOG_CONTEXT_SIZE];
+    hal_flash_read_buffer( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, ctx_buf, INTERNAL_LOG_CONTEXT_SIZE );
     tracker_ctx.internal_log_empty = ctx_buf[0];
 
     if( tracker_ctx.internal_log_empty == FLASH_BYTE_EMPTY_CONTENT )
@@ -271,10 +304,10 @@ tracker_return_status_t tracker_init_internal_log_ctx( void )
 
 tracker_return_status_t tracker_restore_internal_log_ctx( void )
 {
-    uint8_t ctx_buf[32];
+    uint8_t ctx_buf[INTERNAL_LOG_CONTEXT_SIZE];
     uint8_t index = 0;
 
-    hal_flash_read_buffer( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, ctx_buf, 32 );
+    hal_flash_read_buffer( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, ctx_buf, INTERNAL_LOG_CONTEXT_SIZE );
 
     tracker_ctx.internal_log_flush_request = false;
     tracker_ctx.internal_log_empty         = ctx_buf[0];
@@ -319,6 +352,15 @@ tracker_return_status_t tracker_restore_internal_log_ctx( void )
         tracker_ctx.flash_remaining_space += ( uint32_t ) ctx_buf[index++] << 16;
         tracker_ctx.flash_remaining_space += ( uint32_t ) ctx_buf[index++] << 24;
 
+        /* Compute CRC of the context */
+        if( ctx_buf[index] != tracker_ctx_compute_crc( 0xFF, ctx_buf, index ) )
+        {
+            HAL_DBG_TRACE_ERROR( "Internal log context CRC is wrong, erase user internal log\n" );
+            tracker_erase_full_user_flash_memory( );
+
+            return TRACKER_ERROR;
+        }
+
         /* Internal log context */
         HAL_DBG_TRACE_MSG( "#Internal log context:\n" );
         HAL_DBG_TRACE_PRINTF( "#\tnb_scan : %d\n", tracker_ctx.nb_scan );
@@ -340,14 +382,18 @@ void tracker_reset_internal_log( void )
     }
 
     /* Reinit the internal log context */
-    tracker_init_internal_log_ctx( );
+    if( tracker_init_internal_log_ctx( ) != TRACKER_SUCCESS )
+    {
+        HAL_DBG_TRACE_ERROR( "tracker_init_internal_log_ctx failed\n" );
+    }
 }
 
 tracker_return_status_t tracker_restore_app_ctx( void )
 {
-    uint8_t ctx_buf[255];
+    uint8_t  ctx_buf[TRACKER_CONTEXT_SIZE];
+    uint32_t tracker_version = 0;
 
-    hal_flash_read_buffer( FLASH_USER_TRACKER_CTX_START_ADDR, ctx_buf, 255 );
+    hal_flash_read_buffer( FLASH_USER_TRACKER_CTX_START_ADDR, ctx_buf, TRACKER_CONTEXT_SIZE );
 
     tracker_ctx.tracker_context_empty = ctx_buf[0];
 
@@ -358,7 +404,8 @@ tracker_return_status_t tracker_restore_app_ctx( void )
     else
     {
         uint8_t ctx_buf_idx = 1;
-        int32_t latitude = 0, longitude = 0;
+        int32_t latitude    = 0;
+        int32_t longitude   = 0;
 
         memcpy( tracker_ctx.dev_eui, ctx_buf + ctx_buf_idx, SET_LORAWAN_DEVEUI_LEN );
         ctx_buf_idx += SET_LORAWAN_DEVEUI_LEN;
@@ -416,16 +463,42 @@ tracker_return_status_t tracker_restore_app_ctx( void )
         tracker_ctx.accumulated_charge_mAh += ctx_buf[ctx_buf_idx++] << 16;
         tracker_ctx.accumulated_charge_mAh += ctx_buf[ctx_buf_idx++] << 24;
 
+        tracker_ctx.lorawan_sub_region = ctx_buf[ctx_buf_idx++];
+        if( tracker_ctx.lorawan_sub_region == 0xFF )
+        {
+            tracker_ctx.lorawan_sub_region = SMTC_MODEM_NO_SUB_REGION;
+        }
+
+        tracker_version = ctx_buf[ctx_buf_idx++];
+        tracker_version += ctx_buf[ctx_buf_idx++] << 8;
+        tracker_version += ctx_buf[ctx_buf_idx++] << 16;
+
+        tracker_check_app_ctx( );
+
         tracker_print_device_settings( );
+
+        /* Compute CRC of the context, check the CRC only if a firmware version is existing in the flash context and
+         * equal to the installed firmware, the CRC can't be guaranteed on a previous firmware version after a FOTA (if
+         * the CRC was not existing for instance) */
+        if( ( ctx_buf[ctx_buf_idx] != tracker_ctx_compute_crc( 0xFF, ctx_buf, ctx_buf_idx ) ) &&
+            ( tracker_version == ( TRACKER_SUB_MINOR_APP_VERSION + ( TRACKER_MINOR_APP_VERSION << 8 ) +
+                                   ( TRACKER_MAJOR_APP_VERSION << 16 ) ) ) )
+        {
+            HAL_DBG_TRACE_ERROR( "Tracker context crc is wrong\n" );
+
+            return TRACKER_ERROR;
+        }
     }
     return TRACKER_SUCCESS;
 }
 
 void tracker_store_app_ctx( void )
 {
-    uint8_t ctx_buf[255];
-    uint8_t ctx_buf_idx = 0;
-    int32_t latitude = 0, longitude = 0;
+    uint8_t ctx_buf[TRACKER_CONTEXT_SIZE];
+    uint8_t ctx_buf_idx     = 0;
+    int32_t latitude        = 0;
+    int32_t longitude       = 0;
+    uint8_t tracker_ctx_crc = 0;
 
     if( tracker_ctx.tracker_context_empty != FLASH_BYTE_EMPTY_CONTENT )
     {
@@ -485,10 +558,21 @@ void tracker_store_app_ctx( void )
     ctx_buf[ctx_buf_idx++] = tracker_ctx.accumulated_charge_mAh >> 16;
     ctx_buf[ctx_buf_idx++] = tracker_ctx.accumulated_charge_mAh >> 24;
 
+    ctx_buf[ctx_buf_idx++] = tracker_ctx.lorawan_sub_region;
+
+    ctx_buf[ctx_buf_idx++] = TRACKER_SUB_MINOR_APP_VERSION;
+    ctx_buf[ctx_buf_idx++] = TRACKER_MINOR_APP_VERSION;
+    ctx_buf[ctx_buf_idx++] = TRACKER_MAJOR_APP_VERSION;
+
+    /* Compute CRC of the context */
+    tracker_ctx_crc        = tracker_ctx_compute_crc( 0xFF, ctx_buf, ctx_buf_idx );
+    ctx_buf[ctx_buf_idx++] = tracker_ctx_crc;
+
     hal_flash_write_buffer( FLASH_USER_TRACKER_CTX_START_ADDR, ctx_buf, ctx_buf_idx );
 }
 
-void tracker_init_app_ctx( uint8_t* dev_eui, uint8_t* join_eui, uint8_t* app_key, bool store_in_flash )
+void tracker_init_app_ctx( const uint8_t* dev_eui, const uint8_t* join_eui, const uint8_t* app_key,
+                           const bool store_in_flash )
 {
     uint8_t existing_region = LORAWAN_REGION;
 
@@ -513,6 +597,15 @@ void tracker_init_app_ctx( uint8_t* dev_eui, uint8_t* join_eui, uint8_t* app_key
         tracker_ctx.lorawan_region = existing_region;
     }
 
+    if( ( tracker_ctx.lorawan_region == SMTC_MODEM_REGION_AS_923_GRP1 ) && ACTIVATE_SUB_REGION_JAPAN )
+    {
+        tracker_ctx.lorawan_sub_region = SMTC_MODEM_SUB_REGION_JAPAN;
+    }
+    else
+    {
+        tracker_ctx.lorawan_sub_region = SMTC_MODEM_NO_SUB_REGION;
+    }
+
     /* GNSS Parameters */
     tracker_ctx.gnss_antenna_sel = GNSS_PCB_ANTENNA;
     /* Set default position to Semtech France */
@@ -523,8 +616,8 @@ void tracker_init_app_ctx( uint8_t* dev_eui, uint8_t* join_eui, uint8_t* app_key
 
     /* Application Parameters */
     tracker_ctx.accelerometer_used     = true;
-    tracker_ctx.mobile_scan_interval   = MOBILE_SCAN_INTERVAL;
-    tracker_ctx.static_scan_interval   = STATIC_SCAN_INTERVAL;
+    tracker_ctx.mobile_scan_interval   = MOBILE_SCAN_INTERVAL_DEFAULT;
+    tracker_ctx.static_scan_interval   = STATIC_SCAN_INTERVAL_DEFAULT;
     tracker_ctx.airplane_mode          = true;
     tracker_ctx.internal_log_enable    = true;
     tracker_ctx.accumulated_charge_mAh = 0;
@@ -535,14 +628,12 @@ void tracker_init_app_ctx( uint8_t* dev_eui, uint8_t* join_eui, uint8_t* app_key
     }
 }
 
-void tracker_store_wifi_in_internal_log( wifi_mw_event_data_scan_done_t wifi_scan_results )
+void tracker_store_wifi_in_internal_log( wifi_mw_event_data_scan_done_t* wifi_scan_results )
 {
-    uint8_t  scan_buf[256];
+    uint8_t  scan_buf[INTERNAL_LOG_SCAN_BUFFER] = { 0 };
     uint16_t index = 3;  // index 0 1 and 2 are reserved for the scan length and the number of elements
 
-    memset( scan_buf, 0, 256 );
-
-    if( tracker_ctx.flash_remaining_space > 256 )
+    if( tracker_ctx.flash_remaining_space > INTERNAL_LOG_SCAN_BUFFER )
     {
         /* Scan number */
         tracker_ctx.nb_scan++;  // Increase the nb_scan
@@ -550,20 +641,20 @@ void tracker_store_wifi_in_internal_log( wifi_mw_event_data_scan_done_t wifi_sca
         scan_buf[index++] = tracker_ctx.nb_scan >> 8;
 
         scan_buf[index++] = TAG_WIFI;
-        scan_buf[index++] = WIFI_SINGLE_BEACON_LEN * wifi_scan_results.nbr_results + WIFI_TIMESTAMP_LEN;
+        scan_buf[index++] = WIFI_SINGLE_BEACON_LEN * wifi_scan_results->nbr_results + WIFI_TIMESTAMP_LEN;
 
         /* Scan Timestamp */
-        scan_buf[index++] = wifi_scan_results.timestamp;
-        scan_buf[index++] = wifi_scan_results.timestamp >> 8;
-        scan_buf[index++] = wifi_scan_results.timestamp >> 16;
-        scan_buf[index++] = wifi_scan_results.timestamp >> 24;
+        scan_buf[index++] = wifi_scan_results->timestamp;
+        scan_buf[index++] = wifi_scan_results->timestamp >> 8;
+        scan_buf[index++] = wifi_scan_results->timestamp >> 16;
+        scan_buf[index++] = wifi_scan_results->timestamp >> 24;
 
-        for( uint8_t i = 0; i < wifi_scan_results.nbr_results; i++ )
+        for( uint8_t i = 0; i < wifi_scan_results->nbr_results; i++ )
         {
-            scan_buf[index]     = wifi_scan_results.results[i].rssi;
-            scan_buf[index + 1] = ( ( wifi_scan_results.results[i].channel & 0x0F ) |
-                                    ( ( wifi_scan_results.results[i].type & 0x03 ) << 4 ) );
-            memcpy( &scan_buf[index + 2], wifi_scan_results.results[i].mac_address, 6 );
+            scan_buf[index]     = wifi_scan_results->results[i].rssi;
+            scan_buf[index + 1] = ( ( wifi_scan_results->results[i].channel & 0x0F ) |
+                                    ( ( wifi_scan_results->results[i].type & 0x03 ) << 4 ) );
+            memcpy( &scan_buf[index + 2], wifi_scan_results->results[i].mac_address, 6 );
             index += WIFI_SINGLE_BEACON_LEN;
         }
 
@@ -571,27 +662,25 @@ void tracker_store_wifi_in_internal_log( wifi_mw_event_data_scan_done_t wifi_sca
     }
 }
 
-void tracker_store_gnss_in_internal_log( gnss_mw_event_data_scan_done_t gnss_scan_results )
+void tracker_store_gnss_in_internal_log( const gnss_mw_event_data_scan_done_t* gnss_scan_results )
 {
-    uint8_t  scan_buf[256];
-    uint8_t  nb_variable_elements = 0;
-    uint16_t index                = 3;  // index 0 1 and 2 are reserved for the scan length and the number of elements
+    uint8_t  scan_buf[INTERNAL_LOG_SCAN_BUFFER] = { 0 };
+    uint8_t  nb_variable_elements               = 0;
+    uint16_t index = 3;  // index 0 1 and 2 are reserved for the scan length and the number of elements
 
-    memset( scan_buf, 0, 256 );
-
-    if( tracker_ctx.flash_remaining_space > 256 )
+    if( tracker_ctx.flash_remaining_space > INTERNAL_LOG_SCAN_BUFFER )
     {
         /* Scan number */
         tracker_ctx.nb_scan++;  // Increase the nb_scan
         scan_buf[index++] = tracker_ctx.nb_scan;
         scan_buf[index++] = tracker_ctx.nb_scan >> 8;
 
-        if( gnss_scan_results.nb_scan_valid > 0 )
+        if( gnss_scan_results->nb_scans_valid > 0 )
         {
             /* GNSS scan */
-            for( uint8_t nav_index = 0; nav_index < gnss_scan_results.nb_scan_valid; nav_index++ )
+            for( uint8_t nav_index = 0; nav_index < gnss_scan_results->nb_scans_valid; nav_index++ )
             {
-                if( gnss_scan_results.scan[nav_index].nav_size > 0 )
+                if( gnss_scan_results->scans[nav_index].nav_size > 0 )
                 {
                     if( tracker_ctx.gnss_antenna_sel == GNSS_PCB_ANTENNA )
                     {
@@ -604,16 +693,16 @@ void tracker_store_gnss_in_internal_log( gnss_mw_event_data_scan_done_t gnss_sca
 
                     scan_buf[index++] = GNSS_TOKEN_LEN + GNSS_NB_SAT_LEN + GNSS_TIMESTAMP_LEN +
                                         GNSS_LAST_SCAN_IN_GROUP_LEN + GNSS_PROFILE_LEN +
-                                        gnss_scan_results.scan[nav_index].nav_size;
+                                        gnss_scan_results->scans[nav_index].nav_size;
                     /* Scan Timestamp */
-                    scan_buf[index++] = gnss_scan_results.scan[nav_index].timestamp;
-                    scan_buf[index++] = gnss_scan_results.scan[nav_index].timestamp >> 8;
-                    scan_buf[index++] = gnss_scan_results.scan[nav_index].timestamp >> 16;
-                    scan_buf[index++] = gnss_scan_results.scan[nav_index].timestamp >> 24;
-                    scan_buf[index++] = gnss_scan_results.token;
-                    scan_buf[index++] = gnss_scan_results.scan[nav_index].nb_sv;
+                    scan_buf[index++] = gnss_scan_results->scans[nav_index].timestamp;
+                    scan_buf[index++] = gnss_scan_results->scans[nav_index].timestamp >> 8;
+                    scan_buf[index++] = gnss_scan_results->scans[nav_index].timestamp >> 16;
+                    scan_buf[index++] = gnss_scan_results->scans[nav_index].timestamp >> 24;
+                    scan_buf[index++] = gnss_scan_results->token;
+                    scan_buf[index++] = gnss_scan_results->scans[nav_index].nb_svs;
                     /* Last scan of the group ? */
-                    if( nav_index == ( gnss_scan_results.nb_scan_valid - 1 ) )
+                    if( nav_index == ( gnss_scan_results->nb_scans_valid - 1 ) )
                     {
                         scan_buf[index++] = 1;
                     }
@@ -621,11 +710,11 @@ void tracker_store_gnss_in_internal_log( gnss_mw_event_data_scan_done_t gnss_sca
                     {
                         scan_buf[index++] = 0;
                     }
-                    scan_buf[index++] = gnss_scan_results.context.mode;
+                    scan_buf[index++] = gnss_scan_results->context.mode;
 
-                    memcpy( &scan_buf[index], gnss_scan_results.scan[nav_index].nav,
-                            gnss_scan_results.scan[nav_index].nav_size );
-                    index += gnss_scan_results.scan[nav_index].nav_size;
+                    memcpy( &scan_buf[index], gnss_scan_results->scans[nav_index].nav,
+                            gnss_scan_results->scans[nav_index].nav_size );
+                    index += gnss_scan_results->scans[nav_index].nav_size;
                     nb_variable_elements++;
                 }
             }
@@ -649,10 +738,10 @@ void tracker_store_gnss_in_internal_log( gnss_mw_event_data_scan_done_t gnss_sca
             scan_buf[index++] = timestamp >> 8;
             scan_buf[index++] = timestamp >> 16;
             scan_buf[index++] = timestamp >> 24;
-            scan_buf[index++] = 0;
-            scan_buf[index++] = 0;
-            scan_buf[index++] = 1;
-            scan_buf[index++] = gnss_scan_results.context.mode;
+            scan_buf[index++] = 0;  // Set the token to 0 when no sv detected
+            scan_buf[index++] = 0;  // 0 SV detected
+            scan_buf[index++] = 1;  // set a default GNSS mode
+            scan_buf[index++] = gnss_scan_results->context.mode;
 
             nb_variable_elements++;
         }
@@ -662,7 +751,7 @@ void tracker_store_gnss_in_internal_log( gnss_mw_event_data_scan_done_t gnss_sca
 
 void tracker_restore_internal_log( void )
 {
-    uint8_t   scan_buf[512];
+    uint8_t   scan_buf[INTERNAL_LOG_SCAN_BUFFER];
     uint16_t  scan_buf_index    = 0;
     uint8_t   nb_elements       = 0;
     uint8_t   nb_elements_index = 0;
@@ -804,10 +893,7 @@ void tracker_restore_internal_log( void )
             }
             default:
             {
-                if( ( tag_element < 1 ) && ( tag_element > 4 ) )
-                {
-                    scan_buf_index += len;
-                }
+                scan_buf_index += len;
             }
             break;
             }
@@ -819,7 +905,8 @@ void tracker_restore_internal_log( void )
     }
 }
 
-uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_out, bool all_commands_enable )
+uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_out, const uint8_t buffer_out_len,
+                           bool all_commands_enable )
 {
     uint8_t nb_elements         = 0;
     uint8_t nb_elements_index   = 0;
@@ -842,6 +929,16 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
         {
             tag = payload[payload_index++];
             len = payload[payload_index++];
+
+            if( ( output_buffer_index + 2 + len ) >
+                buffer_out_len )  // Avoid buffer overflow, check if the output_buffer_index + TAG + LEN + VALUE is not
+                                  // superior to buffer_out_len
+            {
+                HAL_DBG_TRACE_ERROR(
+                    "if command if treated output_buffer_index will be > buffer_out_len, leave the function and send "
+                    "buffer_out\n" );
+                nb_elements_index = nb_elements;
+            }
 
             switch( tag )
             {
@@ -930,11 +1027,14 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 buffer_out[output_buffer_index++] = GET_MODEM_STATUS_CMD;
                 buffer_out[output_buffer_index++] = GET_MODEM_STATUS_ANSWER_LEN;
                 /* Add if the tracker is clock synchronized */
-                /*if( apps_modem_common_get_utc_time( ) != 0 )
+                if( apps_modem_common_get_utc_time( ) != 0 )
                 {
                     buffer_out[output_buffer_index++] = 1;
-                }*/
-                buffer_out[output_buffer_index++] = 0;
+                }
+                else
+                {
+                    buffer_out[output_buffer_index++] = 0;
+                }
                 buffer_out[output_buffer_index++] = modem_status;
 
                 payload_index += GET_MODEM_STATUS_LEN;
@@ -1274,7 +1374,7 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
             case SET_GNSS_ANTENNA_SEL_CMD:
             {
                 tracker_ctx.new_value_to_set = true;
-                if( ( payload[payload_index] >= 1 ) && ( payload[payload_index] <= 3 ) )
+                if( ( payload[payload_index] >= 1 ) && ( payload[payload_index] <= 2 ) )
                 {
                     tracker_ctx.gnss_antenna_sel = payload[payload_index];
                 }
@@ -1282,11 +1382,11 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 {
                     if( payload[payload_index] < 1 )
                     {
-                        tracker_ctx.gnss_antenna_sel = 1;
+                        tracker_ctx.gnss_antenna_sel = GNSS_PATCH_ANTENNA;
                     }
                     else
                     {
-                        tracker_ctx.gnss_antenna_sel = 3;
+                        tracker_ctx.gnss_antenna_sel = GNSS_PCB_ANTENNA;
                     }
                 }
 
@@ -1350,9 +1450,9 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                     uint16_t alamac_fragment_id;
                     alamac_fragment_id = ( uint16_t ) payload[payload_index] << 8;
                     alamac_fragment_id += payload[payload_index + 1];
-                    uint8_t           almanac_one_sv_buffer[20];
-                    volatile uint32_t almanac_date;
-                    static uint32_t   local_almanac_crc = 0;
+                    uint8_t         almanac_one_sv_buffer[20];
+                    uint32_t        almanac_date;
+                    static uint32_t local_almanac_crc = 0;
 
                     if( tracker_ctx.has_lr11xx_trx_firmware )
                     {
@@ -1481,20 +1581,21 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 mobile_scan_interval = ( uint16_t ) payload[payload_index] << 8;
                 mobile_scan_interval += payload[payload_index + 1];
 
-                if( ( mobile_scan_interval >= 10 ) && ( mobile_scan_interval <= 1800 ) )
+                if( ( mobile_scan_interval >= MOBILE_SCAN_INTERVAL_MIN ) &&
+                    ( mobile_scan_interval <= MOBILE_SCAN_INTERVAL_MAX ) )
                 {
                     tracker_ctx.mobile_scan_interval = mobile_scan_interval;
                 }
                 else
                 {
                     /* Clip the value */
-                    if( payload[payload_index] < 10 )
+                    if( payload[payload_index] < MOBILE_SCAN_INTERVAL_MIN )
                     {
-                        tracker_ctx.mobile_scan_interval = 10;
+                        tracker_ctx.mobile_scan_interval = MOBILE_SCAN_INTERVAL_MIN;
                     }
                     else
                     {
-                        tracker_ctx.mobile_scan_interval = 1800;
+                        tracker_ctx.mobile_scan_interval = MOBILE_SCAN_INTERVAL_MAX;
                     }
                 }
 
@@ -1528,21 +1629,23 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
 
                 static_scan_interval = ( uint16_t ) payload[payload_index] << 8;
                 static_scan_interval += payload[payload_index + 1];
+                static_scan_interval *= 60;
 
-                if( ( static_scan_interval >= 10 ) && ( static_scan_interval <= 1440 ) )
+                if( ( static_scan_interval >= STATIC_SCAN_INTERVAL_MIN ) &&
+                    ( static_scan_interval <= STATIC_SCAN_INTERVAL_MAX ) )
                 {
-                    tracker_ctx.static_scan_interval = static_scan_interval * 60;
+                    tracker_ctx.static_scan_interval = static_scan_interval;
                 }
                 else
                 {
                     /* Clip the value */
-                    if( payload[payload_index] < 10 )
+                    if( payload[payload_index] < STATIC_SCAN_INTERVAL_MIN )
                     {
-                        tracker_ctx.static_scan_interval = 10 * 60;
+                        tracker_ctx.static_scan_interval = STATIC_SCAN_INTERVAL_MIN;
                     }
                     else
                     {
-                        tracker_ctx.static_scan_interval = 1440 * 60;
+                        tracker_ctx.static_scan_interval = STATIC_SCAN_INTERVAL_MAX;
                     }
                 }
 
@@ -1594,6 +1697,35 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 buffer_out[output_buffer_index++] = tracker_ctx.lorawan_region;
 
                 payload_index += GET_LORAWAN_REGION_LEN;
+                break;
+            }
+
+            case SET_LORAWAN_SUB_REGION_CMD:
+            {
+                if( payload[payload_index] <= 1 )
+                {
+                    tracker_ctx.new_value_to_set                = true;
+                    tracker_ctx.lorawan_sub_region              = ( smtc_modem_sub_region_t ) payload[payload_index];
+                    tracker_ctx.lorawan_parameters_have_changed = true;
+                }
+
+                buffer_out[0] += 1;  // Add the element in the output buffer
+                buffer_out[output_buffer_index++] = SET_LORAWAN_SUB_REGION_CMD;
+                buffer_out[output_buffer_index++] = SET_LORAWAN_SUB_REGION_LEN;
+                buffer_out[output_buffer_index++] = tracker_ctx.lorawan_sub_region;
+
+                payload_index += SET_LORAWAN_SUB_REGION_LEN;
+                break;
+            }
+
+            case GET_LORAWAN_SUB_REGION_CMD:
+            {
+                buffer_out[0] += 1;  // Add the element in the output buffer
+                buffer_out[output_buffer_index++] = GET_LORAWAN_SUB_REGION_CMD;
+                buffer_out[output_buffer_index++] = GET_LORAWAN_SUB_REGION_ANSWER_LEN;
+                buffer_out[output_buffer_index++] = tracker_ctx.lorawan_sub_region;
+
+                payload_index += GET_LORAWAN_SUB_REGION_LEN;
                 break;
             }
 
@@ -1672,7 +1804,7 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
             case SET_SCAN_PRIORITY_CMD:
             {
                 tracker_ctx.new_value_to_set = true;
-                if( payload[payload_index] <= 2 )
+                if( payload[payload_index] <= TRACKER_NO_PRIORITY )
                 {
                     tracker_ctx.scan_priority = ( tracker_scan_priority_t ) payload[payload_index];
                 }
@@ -1683,8 +1815,8 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 }
 
                 buffer_out[0] += 1;  // Add the element in the output buffer
-                buffer_out[output_buffer_index++] = SET_AIRPLANE_MODE_CMD;
-                buffer_out[output_buffer_index++] = SET_AIRPLANE_MODE_LEN;
+                buffer_out[output_buffer_index++] = SET_SCAN_PRIORITY_CMD;
+                buffer_out[output_buffer_index++] = SET_SCAN_PRIORITY_LEN;
                 buffer_out[output_buffer_index++] = tracker_ctx.airplane_mode;
 
                 payload_index += SET_SCAN_PRIORITY_LEN;
@@ -1809,7 +1941,8 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                     {
                         if( internal_log_buffer_len == 0 )
                         {
-                            tracker_get_device_settings( internal_log_buffer, &internal_log_buffer_len );
+                            tracker_get_device_settings( internal_log_buffer, INTERNAL_LOG_BUFFER_LEN,
+                                                         &internal_log_buffer_len );
                         }
 
                         if( internal_log_buffer_len > CHUNK_INTERNAL_LOG )
@@ -1844,6 +1977,7 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                             if( internal_log_buffer_len == 0 )
                             {
                                 tracker_get_one_scan_from_internal_log( internal_log_scan_index, internal_log_buffer,
+                                                                        INTERNAL_LOG_BUFFER_LEN,
                                                                         &internal_log_buffer_len );
                             }
 
@@ -1881,10 +2015,11 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                     buffer_out[0] += 1;  // Add the element in the output buffer
                     buffer_out[output_buffer_index++] = READ_APP_INTERNAL_LOG_CMD;
                     buffer_out[output_buffer_index++] = answer_len;
-                    buffer_out[output_buffer_index++] = ( ( internal_log_scan_index - 1 ) * 100 ) / tracker_ctx.nb_scan;
 
                     if( answer_len > 0 )
                     {
+                        buffer_out[output_buffer_index++] =
+                            ( ( internal_log_scan_index - 1 ) * 100 ) / tracker_ctx.nb_scan;
                         memcpy( buffer_out + output_buffer_index, internal_buffer, answer_len - 1 );
 
                         output_buffer_index += answer_len - 1;
@@ -2027,12 +2162,24 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
     return res_size;
 }
 
+uint8_t tracker_get_battery_level( void )
+{
+    if( tracker_ctx.accumulated_charge_mAh > ( TRACKER_BOARD_BATTERY_CAPACITY * 0.8 ) )
+    {
+        return 0;
+    }
+    else
+    {
+        return ( 100 - ( ( tracker_ctx.accumulated_charge_mAh / ( TRACKER_BOARD_BATTERY_CAPACITY * 0.8 ) ) * 100 ) );
+    }
+}
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
  */
 
-bool tracker_check_for_existing_region( uint8_t* existing_region )
+static bool tracker_check_for_existing_region( uint8_t* existing_region )
 {
     uint8_t tracker_modem_ctx_exist = FLASH_BYTE_EMPTY_CONTENT;
     bool    has_existing_region     = false;
@@ -2092,6 +2239,7 @@ static void tracker_print_device_settings( void )
 
     /* LoRaWAN settings */
     HAL_DBG_TRACE_PRINTF( "#\tlorawan_region : %d\n", tracker_ctx.lorawan_region );
+    HAL_DBG_TRACE_PRINTF( "#\tlorawan_sub_region : %d\n", tracker_ctx.lorawan_sub_region );
 
     /* GNSS settings */
     HAL_DBG_TRACE_MSG( "#GNSS Settings:\n" );
@@ -2113,151 +2261,107 @@ static void tracker_print_device_settings( void )
                           TRACKER_SUB_MINOR_APP_VERSION );
 }
 
-static void tracker_get_device_settings( uint8_t* buffer, uint16_t* buffer_len )
+static void tracker_get_device_settings( uint8_t* out_buffer, const uint16_t out_buffer_len, uint16_t* buffer_len )
 {
-    char    output_buffer_tmp[255];
-    uint8_t output_buffer_len_tmp = 0;
+    *buffer_len = 0;
 
     /* LoRaWAN settings */
-    output_buffer_len_tmp =
-        snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#LoRaWAN Settings :\n" );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len +=
+        snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "#LoRaWAN Settings :\n" );
 
-    output_buffer_len_tmp = snprintf(
-        output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
+    *buffer_len += snprintf(
+        ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
         "#\tLORA BASIC MODEM VERSION : LORAWAN : %#02X%#02X%#02X  | FIRMWARE : %#02X%#02X%#02X  \n",
         tracker_ctx.lorawan_version.major, tracker_ctx.lorawan_version.minor, tracker_ctx.lorawan_version.patch,
         tracker_ctx.firmware_version.major, tracker_ctx.firmware_version.minor, tracker_ctx.firmware_version.patch );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
 
     /* Device EUI */
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#\tDevEui : %02X",
-                                      tracker_ctx.dev_eui[0] );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "#\tDevEui : %02X",
+                             tracker_ctx.dev_eui[0] );
 
     for( int i = 1; i < 8; i++ )
     {
-        output_buffer_len_tmp =
-            snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "-%02X", tracker_ctx.dev_eui[i] );
-        memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-        *buffer_len += output_buffer_len_tmp;
+        *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "-%02X",
+                                 tracker_ctx.dev_eui[i] );
     }
 
     /* Join EUI */
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "\r\n#\tAppEui : %02X",
-                                      tracker_ctx.join_eui[0] );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "\r\n#\tAppEui : %02X", tracker_ctx.join_eui[0] );
 
     for( int i = 1; i < 8; i++ )
     {
-        output_buffer_len_tmp =
-            snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "-%02X", tracker_ctx.join_eui[i] );
-        memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-        *buffer_len += output_buffer_len_tmp;
+        *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "-%02X",
+                                 tracker_ctx.join_eui[i] );
     }
 
     /* AppKey / Semtech JS */
     if( tracker_ctx.use_semtech_join_server )
     {
-        output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                          "\r\n#\tAppKey : Semtech join server used" );
-        memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-        *buffer_len += output_buffer_len_tmp;
+        *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                 "\r\n#\tAppKey : Semtech join server used" );
     }
     else
     {
-        output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                          "\r\n#\tAppKey : %02X", tracker_ctx.app_key[0] );
-        memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-        *buffer_len += output_buffer_len_tmp;
+        *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                 "\r\n#\tAppKey : %02X", tracker_ctx.app_key[0] );
 
         for( int i = 1; i < 16; i++ )
         {
-            output_buffer_len_tmp =
-                snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "-%02X", tracker_ctx.app_key[i] );
-            memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-            *buffer_len += output_buffer_len_tmp;
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "-%02X",
+                                     tracker_ctx.app_key[i] );
         }
-        HAL_DBG_TRACE_PRINTF( "\r\n" );
     }
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "\r\n#\tlorawan_region : %d\r\n", tracker_ctx.lorawan_region );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "\r\n#\tlorawan_region : %d\r\n", tracker_ctx.lorawan_region );
+
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "\r\n#\tlorawan_sub_region : %d\r\n", tracker_ctx.lorawan_sub_region );
 
     /* GNSS settings */
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#GNSS Settings:\r\n" );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len +=
+        snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "#GNSS Settings:\r\n" );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\tAntenna sel : %d\r\n", tracker_ctx.gnss_antenna_sel );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\tAntenna sel : %d\r\n", tracker_ctx.gnss_antenna_sel );
 
-    output_buffer_len_tmp =
-        snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#\tassistance position latitude : %f\r\n",
-                  tracker_ctx.gnss_assistance_position_latitude );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len +=
+        snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                  "#\tassistance position latitude : %f\r\n", tracker_ctx.gnss_assistance_position_latitude );
 
-    output_buffer_len_tmp =
-        snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#\tassistance position longitude : %f\r\n",
-                  tracker_ctx.gnss_assistance_position_longitude );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len +=
+        snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                  "#\tassistance position longitude : %f\r\n", tracker_ctx.gnss_assistance_position_longitude );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\tlast almanac update : %ld\r\n", tracker_ctx.gnss_last_almanac_update );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\tlast almanac update : %ld\r\n", tracker_ctx.gnss_last_almanac_update );
 
     /* Application settings */
-    output_buffer_len_tmp =
-        snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#Application settings:\r\n" );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len +=
+        snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "#Application settings:\r\n" );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\taccelerometer_used : %d\r\n", tracker_ctx.accelerometer_used );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\taccelerometer_used : %d\r\n", tracker_ctx.accelerometer_used );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\taccumulated_charge : %ld mAh\r\n", tracker_ctx.accumulated_charge_mAh );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\taccumulated_charge : %ld mAh\r\n", tracker_ctx.accumulated_charge_mAh );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\tmobile_scan_interval : %ld s\r\n", tracker_ctx.mobile_scan_interval );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\tmobile_scan_interval : %ld s\r\n", tracker_ctx.mobile_scan_interval );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\tstatic_scan_interval : %ld min\r\n", tracker_ctx.static_scan_interval / 60 );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\tstatic_scan_interval : %ld min\r\n", tracker_ctx.static_scan_interval / 60 );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\tairplane_mode : %d\r\n", tracker_ctx.airplane_mode );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\tairplane_mode : %d\r\n", tracker_ctx.airplane_mode );
 
-    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                      "#\tscan_priority : %d\r\n", tracker_ctx.scan_priority );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\tscan_priority : %d\r\n", tracker_ctx.scan_priority );
 
-    output_buffer_len_tmp =
-        snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "#\ttracker_fw_version : %d.%d.%d\r\n",
-                  TRACKER_MAJOR_APP_VERSION, TRACKER_MINOR_APP_VERSION, TRACKER_SUB_MINOR_APP_VERSION );
-    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-    *buffer_len += output_buffer_len_tmp;
+    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                             "#\ttracker_fw_version : %d.%d.%d\r\n", TRACKER_MAJOR_APP_VERSION,
+                             TRACKER_MINOR_APP_VERSION, TRACKER_SUB_MINOR_APP_VERSION );
 }
 
 static uint32_t get_uint32_from_array_at_index_and_inc( const uint8_t* array, uint16_t* index )
@@ -2269,7 +2373,7 @@ static uint32_t get_uint32_from_array_at_index_and_inc( const uint8_t* array, ui
     return value;
 }
 
-static void tracker_store_internal_log( uint8_t* buffer, uint8_t nb_variable_elements, uint8_t len )
+static void tracker_store_internal_log( uint8_t* buffer, uint8_t nb_variable_elements, uint16_t len )
 {
     uint16_t index_next_addr = 0;
     uint32_t next_scan_addr  = 0;
@@ -2329,8 +2433,9 @@ static uint8_t tracker_get_remaining_memory_space( void )
 
 static void tracker_store_internal_log_ctx( void )
 {
-    uint8_t ctx_buf[32];
-    uint8_t index = 0;
+    uint8_t ctx_buf[INTERNAL_LOG_CONTEXT_SIZE];
+    uint8_t index           = 0;
+    uint8_t tracker_ctx_crc = 0;
 
     if( tracker_ctx.internal_log_empty != FLASH_BYTE_EMPTY_CONTENT )
     {
@@ -2368,10 +2473,15 @@ static void tracker_store_internal_log_ctx( void )
     ctx_buf[index++] = tracker_ctx.flash_remaining_space >> 16;
     ctx_buf[index++] = tracker_ctx.flash_remaining_space >> 24;
 
+    /* Compute CRC of the context */
+    tracker_ctx_crc  = tracker_ctx_compute_crc( 0xFF, ctx_buf, index );
+    ctx_buf[index++] = tracker_ctx_crc;
+
     hal_flash_write_buffer( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, ctx_buf, index );
 }
 
-void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buffer, uint16_t* buffer_len )
+static void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* out_buffer,
+                                                    const uint16_t out_buffer_len, uint16_t* buffer_len )
 {
     uint8_t   scan_buf[255];
     uint16_t  scan_buf_index    = 0;
@@ -2384,8 +2494,6 @@ void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buff
     time_t    scan_timestamp    = 0;
     struct tm epoch_time;
     uint32_t  job_counter = 0;
-    char      output_buffer_tmp[255];
-    uint8_t   output_buffer_len_tmp = 0;
 
     *buffer_len = 0;
 
@@ -2479,43 +2587,30 @@ void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buff
             uint8_t profile   = scan_buf[scan_buf_index++];
 
             /* Display Raw NAV Message*/
-            output_buffer_len_tmp =
-                snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "[%d-%d-%d %d:%d:%d.000] ",
-                          epoch_time.tm_year + 1900, epoch_time.tm_mon + 1, epoch_time.tm_mday, epoch_time.tm_hour,
-                          epoch_time.tm_min, epoch_time.tm_sec );
-            memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-            *buffer_len += output_buffer_len_tmp;
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                     "[%d-%d-%d %d:%d:%d.000] ", epoch_time.tm_year + 1900, epoch_time.tm_mon + 1,
+                                     epoch_time.tm_mday, epoch_time.tm_hour, epoch_time.tm_min, epoch_time.tm_sec );
 
-            output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "[%ld - %d] ",
-                                              job_counter, tag_element );
-            memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-            *buffer_len += output_buffer_len_tmp;
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                     "[%ld - %d] ", job_counter, tag_element );
 
             if( nav_len > 0 )
             {
-                output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "01" );
-                memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                *buffer_len += output_buffer_len_tmp;
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "01" );
 
                 for( uint16_t i = 0; i < nav_len; i++ )
                 {
-                    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "%02X",
-                                                      scan_buf[scan_buf_index++] );
-                    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                    *buffer_len += output_buffer_len_tmp;
+                    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                             "%02X", scan_buf[scan_buf_index++] );
                 }
             }
             else
             {
-                output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "0007" );
-                memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                *buffer_len += output_buffer_len_tmp;
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "0007" );
             }
 
-            output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                              ",%d,%d,%d,%d\r\n", token, last_scan, nb_sat, profile );
-            memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-            *buffer_len += output_buffer_len_tmp;
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                     ",%d,%d,%d,%d\r\n", token, last_scan, nb_sat, profile );
 
             break;
         }
@@ -2533,17 +2628,12 @@ void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buff
 
             for( uint8_t i = 0; i < ( ( len - WIFI_TIMESTAMP_LEN ) / WIFI_SINGLE_BEACON_LEN ); i++ )
             {
-                output_buffer_len_tmp =
-                    snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "[%d-%d-%d %d:%d:%d.000] ",
-                              epoch_time.tm_year + 1900, epoch_time.tm_mon + 1, epoch_time.tm_mday, epoch_time.tm_hour,
-                              epoch_time.tm_min, epoch_time.tm_sec );
-                memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                *buffer_len += output_buffer_len_tmp;
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                         "[%d-%d-%d %d:%d:%d.000] ", epoch_time.tm_year + 1900, epoch_time.tm_mon + 1,
+                                         epoch_time.tm_mday, epoch_time.tm_hour, epoch_time.tm_min, epoch_time.tm_sec );
 
-                output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                                  "[%ld - %d] ", job_counter, tag_element );
-                memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                *buffer_len += output_buffer_len_tmp;
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                         "[%ld - %d] ", job_counter, tag_element );
 
                 wifi_rssi = scan_buf[scan_buf_index++];
 
@@ -2569,23 +2659,16 @@ void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buff
                 /* Display MAC address */
                 for( uint8_t i = 0; i < 5; i++ )
                 {
-                    output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                                                      "%02X:", scan_buf[scan_buf_index++] );
-                    memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                    *buffer_len += output_buffer_len_tmp;
+                    *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                             "%02X:", scan_buf[scan_buf_index++] );
                 }
 
-                output_buffer_len_tmp = snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len, "%02X,",
-                                                  scan_buf[scan_buf_index++] );
-                memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                *buffer_len += output_buffer_len_tmp;
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "%02X,",
+                                         scan_buf[scan_buf_index++] );
 
                 /* Display Scan Information */
-                output_buffer_len_tmp =
-                    snprintf( output_buffer_tmp, INTERNAL_LOG_BUFFER_LEN - *buffer_len,
-                              "CHANNEL_%d,TYPE_%c,%d,0,0,0,0\r\n", wifi_channel, wifi_type_char, wifi_rssi );
-                memcpy( buffer + *buffer_len, output_buffer_tmp, output_buffer_len_tmp );
-                *buffer_len += output_buffer_len_tmp;
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                         "CHANNEL_%d,TYPE_%c,%d,0,0,0,0\r\n", wifi_channel, wifi_type_char, wifi_rssi );
             }
             break;
         }
@@ -2599,10 +2682,7 @@ void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buff
         }
         default:
         {
-            if( ( tag_element < 1 ) && ( tag_element > 4 ) )
-            {
-                scan_buf_index += len;
-            }
+            scan_buf_index += len;
         }
         break;
         }
@@ -2610,7 +2690,7 @@ void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_t* buff
     }
 }
 
-void tracker_erase_internal_log( void )
+static void tracker_erase_internal_log( void )
 {
     uint8_t nb_page_to_erase = 0;
 
@@ -2625,7 +2705,7 @@ void tracker_erase_internal_log( void )
     hal_flash_erase_page( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, 1 );
 }
 
-void tracker_erase_full_user_flash_memory( void )
+static void tracker_erase_full_user_flash_memory( void )
 {
     uint8_t nb_page_to_erase = 0;
 
@@ -2635,6 +2715,94 @@ void tracker_erase_full_user_flash_memory( void )
 
     /* Erase ctx */
     hal_flash_erase_page( FLASH_USER_INTERNAL_LOG_CTX_START_ADDR, 1 );
+}
+
+static bool smtc_board_get_almanac_dates( const void* context, uint32_t* oldest_almanac_date,
+                                          uint32_t* newest_almanac_date )
+{
+    lr11xx_status_t status       = LR11XX_STATUS_ERROR;
+    uint8_t         i            = 0;
+    uint16_t        almanac_date = 0;
+
+    *oldest_almanac_date = 0;
+    *newest_almanac_date = 0;
+
+    for( i = 0; i < 127; i++ )
+    {
+        /* Suspend the modem radio access */
+        smtc_modem_suspend_before_user_radio_access( );
+
+        status = lr11xx_gnss_get_almanac_age_for_satellite( context, i, &almanac_date );
+
+        /* Resume the modem radio access */
+        smtc_modem_resume_after_user_radio_access( );
+
+        if( status != LR11XX_STATUS_OK )
+        {
+            return false;
+        }
+        if( almanac_date > 0 )
+        {
+            if( ( *oldest_almanac_date == 0 ) && ( *newest_almanac_date == 0 ) )
+            {
+                *oldest_almanac_date = almanac_date;
+                *newest_almanac_date = almanac_date;
+            }
+            else
+            {
+                if( almanac_date < *oldest_almanac_date )
+                {
+                    *oldest_almanac_date = almanac_date;
+                }
+                if( almanac_date > *newest_almanac_date )
+                {
+                    *newest_almanac_date = almanac_date;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+static void tracker_check_app_ctx( void )
+{
+    bool new_paramater_to_store = false;
+    /* GNSS Parameters */
+    if( ( tracker_ctx.gnss_antenna_sel != GNSS_PATCH_ANTENNA ) && ( tracker_ctx.gnss_antenna_sel != GNSS_PCB_ANTENNA ) )
+    {
+        new_paramater_to_store       = true;
+        tracker_ctx.gnss_antenna_sel = GNSS_PCB_ANTENNA;
+        HAL_DBG_TRACE_WARNING( "gnss_antenna_sel out of bounds, set to default value\n" );
+    }
+
+    /* Application Parameters */
+    if( ( tracker_ctx.mobile_scan_interval < MOBILE_SCAN_INTERVAL_MIN ) ||
+        ( tracker_ctx.mobile_scan_interval > MOBILE_SCAN_INTERVAL_MAX ) )
+    {
+        new_paramater_to_store           = true;
+        tracker_ctx.mobile_scan_interval = MOBILE_SCAN_INTERVAL_DEFAULT;
+        HAL_DBG_TRACE_WARNING( "mobile_scan_interval out of bounds, set to default value\n" );
+    }
+
+    if( ( tracker_ctx.static_scan_interval < STATIC_SCAN_INTERVAL_MIN ) ||
+        ( tracker_ctx.static_scan_interval > STATIC_SCAN_INTERVAL_MAX ) )
+    {
+        new_paramater_to_store           = true;
+        tracker_ctx.static_scan_interval = STATIC_SCAN_INTERVAL_DEFAULT;
+        HAL_DBG_TRACE_WARNING( "static_scan_interval out of bounds, set to default value\n" );
+    }
+
+    if( ( tracker_ctx.scan_priority != TRACKER_GNSS_PRIORITY ) && ( tracker_ctx.scan_priority != TRACKER_NO_PRIORITY ) )
+    {
+        new_paramater_to_store    = true;
+        tracker_ctx.scan_priority = TRACKER_GNSS_PRIORITY;
+        HAL_DBG_TRACE_WARNING( "scan_priority out of bounds, set to default value\n" );
+    }
+
+    if( new_paramater_to_store )
+    {
+        tracker_store_app_ctx( );
+    }
 }
 
 /* --- EOF ------------------------------------------------------------------ */

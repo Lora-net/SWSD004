@@ -10,8 +10,7 @@
       <TargetName>tracker_application</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pArmCC>6130001::V6.13.1::.\ARMCLANG</pArmCC>
-      <pCCUsed>6130001::V6.13.1::.\ARMCLANG</pCCUsed>
+      <pCCUsed>6180000::V6.18::ARMCLANG</pCCUsed>
       <uAC6>1</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -186,6 +185,8 @@
             <uocXRam>0</uocXRam>
             <RvdsVP>2</RvdsVP>
             <RvdsMve>0</RvdsMve>
+            <RvdsCdeCp>0</RvdsCdeCp>
+            <nBranchProt>0</nBranchProt>
             <hadIRAM2>0</hadIRAM2>
             <hadIROM2>0</hadIROM2>
             <StupSel>8</StupSel>
@@ -337,7 +338,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,LR1110TRK1XKS,STM32WB55xx,USE_FULL_LL_DRIVER,LR11XX,LR11XX_TRANSCEIVER,ENABLE_MODEM_GNSS_FEATURE,SMTC_TRACKER,REGION_EU_868,REGION_US_915,LR11XX_DEFINED_JOIN_PARAMETERS,USE_LR11XX_CE, USE_PRE_PROVISIONED_FEATURES,RP2_101,TASK_EXTENDED_1,TASK_EXTENDED_2,ENABLE_FAST_CLOCK_SYNC,MW_DBG_TRACE=1,</Define>
+              <Define>LR1110TRK1XKS,STM32WB55xx,ADD_SMTC_ALC_SYNC,ADD_SMTC_FILE_UPLOAD,ADD_SMTC_STREAM,ENABLE_MODEM_GNSS_FEATURE,HAL_DBG_TRACE=1,LR1120,LR11XX,LR11XX_TRANSCEIVER,MODEM_HAL_DBG_TRACE=1,MODEM_HAL_DEEP_DBG_TRACE=0,REGION_AS_923,REGION_AU_915,REGION_CN_470,REGION_CN_470_RP_1_0,REGION_EU_868,REGION_IN_865,REGION_KR_920,REGION_RU_864,REGION_US_915,RP2_103,SMTC_MULTICAST,STM32L476xx,USER_DEFINED_JOIN_PARAMETERS,USE_FULL_LL_DRIVER,USE_HAL_DRIVER,WW2G4_SINGLE_DATARATE,LR11XX_DEFINED_JOIN_PARAMETERS,USE_LR11XX_CE, USE_PRE_PROVISIONED_FEATURES,RP2_101,TASK_EXTENDED_1,TASK_EXTENDED_2,ENABLE_FAST_CLOCK_SYNC,MW_DBG_TRACE=1</Define>
               <Undefine></Undefine>
               <IncludePath>..\..\..\..\apps\common;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ral\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ralf\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_drivers\lr11xx_driver\src;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\STM32WBxx_HAL_Driver\Inc\Legacy;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\STM32WBxx_HAL_Driver\Inc;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\CMSIS\Include;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\CMSIS\Device\ST\STM32WBxx\Include;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\hal_config;..\..\..\..\smtc_hal\inc;..\..\..\..\smtc_hal\STMicroelectronics\STM32WB55xx\smtc_modem_hal;..\..\..\..\smtc_hal\STMicroelectronics\STM32WB55xx\inc;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_config;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_hal;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\device_management;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_core;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\headers;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_planner\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_drivers\lr11xx_driver;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\lr11xx_crypto_engine;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_config;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_core;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_supervisor;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\device_management;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_services;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lorawan_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\headers;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\stream;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\alc_sync;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\file_upload;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\almanac_update;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ralf\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ral\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\services;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\lr1mac_class_c;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\lr1mac_class_b;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_planner\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\smtc_secure_element;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\soft_secure_element;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lorawan_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_hal;..\..\..\..\lora_basics_modem\lora_basics_modem\;..\..\..\..\smtc_event;..\..\..\..\smtc_hal\board\lr1110trk1xks;..\..\..\..\smtc_hal\board\;..\..\tracker_application;..\tracker_utility;..\middleware\ble;..\middleware\ble\app;..\middleware\ble\lpm\tiny_lpm;..\middleware\ble\sequencer;..\middleware\ble\STM32_WPAN;..\middleware\ble\STM32_WPAN\interface\patterns\ble_thread\shci;..\middleware\ble\STM32_WPAN\interface\patterns\ble_thread\tl;..\middleware\ble\STM32_WPAN\interface\patterns\ble_thread;..\middleware\ble\STM32_WPAN\utilities;..\middleware\ble\STM32_WPAN\ble\core;..\middleware\ble\STM32_WPAN\ble\core\auto;..\middleware\ble\STM32_WPAN\ble\core\template;..\middleware\ble\STM32_WPAN\ble\svc\Inc;..\middleware\ble\STM32_WPAN\ble\svc\Src;..\middleware\ble\STM32_WPAN\ble;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\Leds;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\hall_effect;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\lis2de12;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\usr_button;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\board;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\ral_bsp;..\..\..\..\shields\LR11XX\radio_drivers_hal;..\..\..\..\shields\LR11XX\Helpers;..\..\..\..\shields\LR11XX\smtc_lr11xx_board;..\..\..\..\shields\interface;..\..\..\..\geolocation_middleware\bsp;..\..\..\..\geolocation_middleware\common;..\..\..\..\geolocation_middleware\gnss\src;..\..\..\..\geolocation_middleware\wifi\src;..\..\..\..\lora_basics_modem\printers</IncludePath>
             </VariousControls>
@@ -352,7 +353,7 @@
             <NoWarn>0</NoWarn>
             <uSurpInc>0</uSurpInc>
             <useXO>0</useXO>
-            <uClangAs>0</uClangAs>
+            <ClangAsOpt>4</ClangAsOpt>
             <VariousControls>
               <MiscControls></MiscControls>
               <Define></Define>
@@ -1278,6 +1279,41 @@
               <FileName>region_us_915.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_us_915.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_as_923.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_as_923.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_au_915.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_au_915.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_cn_470.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_cn_470.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_cn_470_rp_1_0.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_cn_470_rp_1_0.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_in_865.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_in_865.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_kr_920.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_kr_920.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_ru_864.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_ru_864.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1510,8 +1546,7 @@
       <TargetName>tracker_lr1110_update</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pArmCC>6130001::V6.13.1::.\ARMCLANG</pArmCC>
-      <pCCUsed>6130001::V6.13.1::.\ARMCLANG</pCCUsed>
+      <pCCUsed>6180000::V6.18::ARMCLANG</pCCUsed>
       <uAC6>1</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -1686,6 +1721,8 @@
             <uocXRam>0</uocXRam>
             <RvdsVP>2</RvdsVP>
             <RvdsMve>0</RvdsMve>
+            <RvdsCdeCp>0</RvdsCdeCp>
+            <nBranchProt>0</nBranchProt>
             <hadIRAM2>0</hadIRAM2>
             <hadIROM2>0</hadIROM2>
             <StupSel>8</StupSel>
@@ -1837,7 +1874,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,LR1110TRK1XKS,STM32WB55xx,USE_FULL_LL_DRIVER,LR11XX,LR11XX_TRANSCEIVER,ENABLE_MODEM_GNSS_FEATURE,SMTC_TRACKER,REGION_EU_868,REGION_US_915,LR11XX_DEFINED_JOIN_PARAMETERS,USE_LR11XX_CE, USE_PRE_PROVISIONED_FEATURES,RP2_101,TASK_EXTENDED_1,TASK_EXTENDED_2,ENABLE_FAST_CLOCK_SYNC,MW_DBG_TRACE=1,</Define>
+              <Define>LR1110TRK1XKS,STM32WB55xx,ADD_SMTC_ALC_SYNC,ADD_SMTC_FILE_UPLOAD,ADD_SMTC_STREAM,ENABLE_MODEM_GNSS_FEATURE,HAL_DBG_TRACE=1,LR1120,LR11XX,LR11XX_TRANSCEIVER,MODEM_HAL_DBG_TRACE=1,MODEM_HAL_DEEP_DBG_TRACE=0,REGION_AS_923,REGION_AU_915,REGION_CN_470,REGION_CN_470_RP_1_0,REGION_EU_868,REGION_IN_865,REGION_KR_920,REGION_RU_864,REGION_US_915,RP2_103,SMTC_MULTICAST,STM32L476xx,USER_DEFINED_JOIN_PARAMETERS,USE_FULL_LL_DRIVER,USE_HAL_DRIVER,WW2G4_SINGLE_DATARATE,LR11XX_DEFINED_JOIN_PARAMETERS,USE_LR11XX_CE, USE_PRE_PROVISIONED_FEATURES,RP2_101,TASK_EXTENDED_1,TASK_EXTENDED_2,ENABLE_FAST_CLOCK_SYNC,MW_DBG_TRACE=1</Define>
               <Undefine></Undefine>
               <IncludePath>..\..\..\..\apps\common;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ral\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ralf\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_drivers\lr11xx_driver\src;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\STM32WBxx_HAL_Driver\Inc\Legacy;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\STM32WBxx_HAL_Driver\Inc;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\CMSIS\Include;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\Drivers\CMSIS\Device\ST\STM32WBxx\Include;..\..\..\..\host_driver\STMicroelectronics\STM32WBxx\hal_config;..\..\..\..\smtc_hal\inc;..\..\..\..\smtc_hal\STMicroelectronics\STM32WB55xx\smtc_modem_hal;..\..\..\..\smtc_hal\STMicroelectronics\STM32WB55xx\inc;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_config;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_hal;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\device_management;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_core;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\headers;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_planner\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_drivers\lr11xx_driver;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\lr11xx_crypto_engine;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_config;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_core;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_supervisor;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\device_management;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\modem_services;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lorawan_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\headers;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\stream;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\alc_sync;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\file_upload;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services\src\almanac_update;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_services;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ralf\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_ral\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\services;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\lr1mac_class_c;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\lr1mac_class_b;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\radio_planner\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\smtc_secure_element;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\soft_secure_element;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\smtc_modem_crypto\;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lorawan_api;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src;..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_hal;..\..\..\..\lora_basics_modem\lora_basics_modem\;..\..\..\..\smtc_event;..\..\..\..\smtc_hal\board\lr1110trk1xks;..\..\..\..\smtc_hal\board\;..\..\tracker_application;..\tracker_utility;..\middleware\ble;..\middleware\ble\app;..\middleware\ble\lpm\tiny_lpm;..\middleware\ble\sequencer;..\middleware\ble\STM32_WPAN;..\middleware\ble\STM32_WPAN\interface\patterns\ble_thread\shci;..\middleware\ble\STM32_WPAN\interface\patterns\ble_thread\tl;..\middleware\ble\STM32_WPAN\interface\patterns\ble_thread;..\middleware\ble\STM32_WPAN\utilities;..\middleware\ble\STM32_WPAN\ble\core;..\middleware\ble\STM32_WPAN\ble\core\auto;..\middleware\ble\STM32_WPAN\ble\core\template;..\middleware\ble\STM32_WPAN\ble\svc\Inc;..\middleware\ble\STM32_WPAN\ble\svc\Src;..\middleware\ble\STM32_WPAN\ble;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\Leds;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\hall_effect;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\lis2de12;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\peripherals\usr_button;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\board;..\..\..\..\shields\LR11XX\LR1110TRK1xKS\BSP\ral_bsp;..\..\..\..\shields\LR11XX\radio_drivers_hal;..\..\..\..\shields\LR11XX\Helpers;..\..\..\..\shields\LR11XX\smtc_lr11xx_board;..\..\..\..\shields\interface;..\..\..\..\geolocation_middleware\bsp;..\..\..\..\geolocation_middleware\common;..\..\..\..\geolocation_middleware\gnss\src;..\..\..\..\geolocation_middleware\wifi\src;..\..\..\..\lora_basics_modem\printers</IncludePath>
             </VariousControls>
@@ -1852,7 +1889,7 @@
             <NoWarn>0</NoWarn>
             <uSurpInc>0</uSurpInc>
             <useXO>0</useXO>
-            <uClangAs>0</uClangAs>
+            <ClangAsOpt>4</ClangAsOpt>
             <VariousControls>
               <MiscControls></MiscControls>
               <Define></Define>
@@ -2778,6 +2815,41 @@
               <FileName>region_us_915.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_us_915.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_as_923.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_as_923.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_au_915.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_au_915.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_cn_470.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_cn_470.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_cn_470_rp_1_0.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_cn_470_rp_1_0.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_in_865.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_in_865.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_kr_920.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_kr_920.c</FilePath>
+            </File>
+            <File>
+              <FileName>region_ru_864.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lora_basics_modem\lora_basics_modem\smtc_modem_core\lr1mac\src\smtc_real\src\region_ru_864.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -3021,5 +3093,14 @@
     </components>
     <files/>
   </RTE>
+
+  <LayerInfo>
+    <Layers>
+      <Layer>
+        <LayName>tracker_application</LayName>
+        <LayPrjMark>1</LayPrjMark>
+      </Layer>
+    </Layers>
+  </LayerInfo>
 
 </Project>

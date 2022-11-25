@@ -36,7 +36,7 @@ APP = full_almanac_update
 APP_TRACE ?= yes
 MODEM_TRACE ?= yes
 MCU_BOARD ?= NUCLEO_L476RG
-RADIO_BOARD ?= LR1110MB1LXKS
+RADIO_BOARD ?= LR1110MB1DJS
 
 TOOLCHAIN_MAKEFILE = $(TOP_DIR)/toolchain/gcc/toolchain.mk
 PROJECTS_COMMON_MAKEFILE = $(TOP_DIR)/apps/common/apps_modem_common.mk
@@ -46,7 +46,7 @@ SHIELD_MAKEFILE = $(TOP_DIR)/shields/radio_shield.mk
 # building variables
 ######################################
 # debug build?
-DEBUG ?= 1
+DEBUG ?= yes
 # optimization
 OPT ?= -O0
 

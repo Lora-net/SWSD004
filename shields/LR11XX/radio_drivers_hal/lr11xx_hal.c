@@ -279,10 +279,10 @@ lr11xx_hal_status_t lr11xx_hal_reset( const void* context )
     hal_gpio_set_value( lr11xx_context->reset, 0 );
     hal_mcu_wait_us( 5000 );
     hal_gpio_set_value( lr11xx_context->reset, 1 );
-    hal_mcu_wait_us( 5000 );
 
-    // Wait 200ms until internal lr11xx fw is ready
-    hal_mcu_wait_us( 200000 );
+    // Wait until internal lr11xx fw is ready
+    hal_mcu_wait_us( 250000 );
+
     radio_mode = RADIO_AWAKE;
 
     return LR11XX_HAL_STATUS_OK;

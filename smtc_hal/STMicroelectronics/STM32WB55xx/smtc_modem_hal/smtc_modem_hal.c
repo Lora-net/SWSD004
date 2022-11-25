@@ -42,6 +42,7 @@
 
 #include "smtc_modem_hal.h"
 #include "smtc_hal.h"
+#include "smtc_board.h"
 
 #include "modem_pinout.h"
 
@@ -95,10 +96,6 @@ volatile bool __attribute__( ( section( ".noinit" ) ) ) crashlog_available;
 /* ------------ Reset management ------------*/
 void smtc_modem_hal_reset_mcu( void )
 {
-#ifdef COVERAGE_ENABLED
-    /* Save coverage info */
-    coverage_dump( );
-#endif
     hal_mcu_reset( );
 }
 
@@ -307,7 +304,19 @@ uint32_t smtc_modem_hal_get_radio_tcxo_startup_delay_ms( void )
 
 uint8_t smtc_modem_hal_get_battery_level( void )
 {
-    return 254;
+    uint8_t battery_level;
+
+    battery_level = smtc_board_get_battery_level( );
+
+    /* returned value shall be between 1 and 254, 1 meaning 0% and 254 meaning 100% */
+    if( battery_level > 0 )
+    {
+        return ( ( battery_level * 254 ) / 100 );
+    }
+    else
+    {
+        return 1;
+    }
 }
 
 int8_t smtc_modem_hal_get_temperature( void )

@@ -27,12 +27,16 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Determine the RADIO_BOARD
-ifeq ($(RADIO_BOARD), LR1110MB1LXKS)
-PLATFORM_BOARD_MAKEFILE = $(TOP_DIR)/shields/LR11XX/LR1110MB1LxKS/lr1110_mb1lxks.mk
-else ifeq ($(RADIO_BOARD), LR1110TRK1XKS)
+
+ifeq ($(RADIO_BOARD), LR1110TRK1XKS)
 PLATFORM_BOARD_MAKEFILE = $(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/lr1110_trk1xks.mk
 else
-$(error Invalid platform board, please select a supported platform board)
+PLATFORM_BOARD_MAKEFILE = $(TOP_DIR)/shields/LR11XX/lr11xx.mk
+C_SOURCES +=  \
+$(TOP_DIR)/shields/common/usr_button.c
+C_INCLUDES +=  \
+-I$(TOP_DIR)/shields/interface \
+-I$(TOP_DIR)/shields/common
 endif
 
 include $(PLATFORM_BOARD_MAKEFILE)

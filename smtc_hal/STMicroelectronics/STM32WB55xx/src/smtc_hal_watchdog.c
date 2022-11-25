@@ -63,7 +63,7 @@
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-static IWDG_HandleTypeDef iwdg_handle;
+static IWDG_HandleTypeDef iwdg_handle = { 0 };
 
 /*
  * -----------------------------------------------------------------------------

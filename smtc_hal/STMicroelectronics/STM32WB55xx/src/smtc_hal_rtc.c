@@ -112,14 +112,14 @@
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-hal_rtc_t hal_rtc;
+hal_rtc_t hal_rtc = { 0 };
 
 static volatile bool wut_timer_irq_happened = false;
 
 /*!
  * @brief RTC Alarm
  */
-static RTC_AlarmTypeDef rtc_alarm;
+static RTC_AlarmTypeDef rtc_alarm = { 0 };
 
 /*!
  * @brief Number of days in each month on a normal year
@@ -146,16 +146,6 @@ static const uint8_t days_in_month_leap_year[] = { 31, 29, 31, 30, 31, 30, 31, 3
 static uint32_t hal_rtc_ms_2_wakeup_timer_tick( const uint32_t milliseconds );
 
 /*!
- * @brief Converts time in s to time in wake up timer ticks
- * When RTCCLK = 32768 Hz and ck_spre (Synchronous prescaler output clock) is
- * adjusted to 1 Hz
- *
- * @param [in] seconds Time in seconds
- * @returns ticks Time in wake up timer ticks
- */
-static uint32_t hal_rtc_s_2_wakeup_timer_tick( const uint32_t seconds );
-
-/*!
  * @brief Get the elapsed time in seconds and milliseconds since RTC initialization
  *
  * @param [out] milliseconds_div_10 Number of 0.1 milliseconds elapsed since RTC
@@ -178,8 +168,8 @@ static uint64_t rtc_get_timestamp_in_ticks( RTC_DateTypeDef* date, RTC_TimeTypeD
 
 void hal_rtc_init( void )
 {
-    RTC_TimeTypeDef time;
-    RTC_DateTypeDef date;
+    RTC_TimeTypeDef time = { 0 };
+    RTC_DateTypeDef date = { 0 };
 
     __HAL_RCC_RTC_ENABLE( );
 
@@ -218,7 +208,7 @@ void hal_rtc_init( void )
        registers) */
     HAL_RTCEx_EnableBypassShadow( &hal_rtc.handle );
 
-    HAL_NVIC_SetPriority( RTC_Alarm_IRQn, 1, 0 );
+    HAL_NVIC_SetPriority( RTC_Alarm_IRQn, 0, 0 );
     HAL_NVIC_EnableIRQ( RTC_Alarm_IRQn );
 
     /* Init alarm. */
@@ -413,13 +403,6 @@ void hal_rtc_delay_in_ms( const uint32_t milliseconds )
     }
 }
 
-void hal_rtc_wakeup_timer_set_s( const int32_t seconds )
-{
-    uint32_t delay_s_2_tick = hal_rtc_s_2_wakeup_timer_tick( seconds );
-
-    HAL_RTCEx_SetWakeUpTimer_IT( &hal_rtc.handle, delay_s_2_tick, RTC_WAKEUPCLOCK_CK_SPRE_16BITS );
-}
-
 void hal_rtc_wakeup_timer_set_ms( const int32_t milliseconds )
 {
     uint32_t delay_ms_2_tick = hal_rtc_ms_2_wakeup_timer_tick( milliseconds );
@@ -478,15 +461,6 @@ static uint32_t hal_rtc_ms_2_wakeup_timer_tick( const uint32_t milliseconds )
     return nb_tick;
 }
 
-static uint32_t hal_rtc_s_2_wakeup_timer_tick( const uint32_t seconds )
-{
-    uint32_t nb_tick = 0;
-    /* Compute is done for LSE @ 32.768kHz
-       Assuming that RTC_WAKEUPCLOCK_CK_SPRE_16BITS is used => tick is 1s */
-    nb_tick = seconds;
-    return nb_tick;
-}
-
 static uint32_t hal_rtc_get_calendar_time( uint16_t* milliseconds_div_10 )
 {
     RTC_TimeTypeDef time;
@@ -542,7 +516,7 @@ static uint64_t rtc_get_timestamp_in_ticks( RTC_DateTypeDef* date, RTC_TimeTypeD
     uint32_t seconds;
 
     /* Make sure it is correct due to asynchronous nature of RTC */
-    volatile uint32_t ssr;
+    uint32_t ssr;
 
     do
     {

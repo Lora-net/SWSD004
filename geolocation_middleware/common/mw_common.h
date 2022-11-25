@@ -87,23 +87,23 @@ typedef struct mw_version_s
  */
 
 /**
- * @brief Configure lr11xx for scan
+ * @brief Configure the lr11xx radio for scan
  *
- * @param [in] ral_context Chip implementation context
+ * @param [in] radio_context Chip implementation context
  *
  * @return a boolean set to true for success, false otherwise
  */
-bool lr11xx_configure_for_scan( const void* ral_context );
+bool mw_radio_configure_for_scan( const void* radio_context );
 
 /*!
- * @brief Set the lr11xx to sleep. To be called by middlewares at the end of the RP task_done handler.
+ * @brief Set the lr11xx radio to sleep. To be called by middlewares at the end of the RP task_done handler.
  *
- * @param [in] ral_context Chip implementation context
+ * @param [in] radio_context Chip implementation context
  */
-void lr11xx_set_sleep( const void* ral_context );
+void mw_radio_set_sleep( const void* radio_context );
 
 /**
- * @brief Get the current GPS time from the modem.
+ * @brief Get the current GPS time from the modem
  *
  * @return the current GPS time, or 0 if no valid time is available
  */

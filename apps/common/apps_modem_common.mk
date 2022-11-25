@@ -41,7 +41,7 @@ else
     $(error Invalid crypto option)
 endif
 
-RP_VERSION ?= RP2_101
+RP_VERSION ?= RP2_103
 
 SMTC_HAL_MAKEFILE = $(TOP_DIR)/smtc_hal/smtc_hal_target.mk
 LBM_MAKEFILE = $(TOP_DIR)/lora_basics_modem/makefiles/common.mk

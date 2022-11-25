@@ -68,6 +68,11 @@ extern "C" {
 
 #define BOARD_TX_POWER_OFFSET 0
 
+/*!
+ * @brief Define the battery capacity in mAh.
+ */
+#define TRACKER_BOARD_BATTERY_CAPACITY 2400
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
@@ -178,10 +183,12 @@ void smtc_board_set_gnss_pcb_antenna( void );
  * @brief Measure the dropout voltage when the board drains batteries current
  *
  * @param [in] stack_id The stack identifier
+ * @param [in] region LoRaWAN region used, ref \smtc_modem_region_t
  * @param [out] drop Voltage drop measured during the TX
  * @param [out] time_recovery  time taken to the supply rail to reach Vnom after the TX shutdown
  */
-void smtc_board_measure_battery_drop( uint8_t stack_id, int32_t* drop, uint32_t* time_recovery );
+void smtc_board_measure_battery_drop( uint8_t stack_id, smtc_modem_region_t region, int32_t* drop,
+                                      uint32_t* time_recovery );
 
 /*!
  * @brief Enable or disable the hall effect sensor
@@ -201,26 +208,6 @@ void smtc_board_hall_effect_enable_for_duration( uint32_t duration_ms );
  * @brief Stop the effect hall timer and stop the sensor
  */
 void smtc_board_hall_effect_stop_timer( void );
-
-/*!
- * @brief Measure the dropout voltage when the board drains batteries current
- *
- * @param [in] stack_id The stack identifier
- * @param [out] drop Voltage drop measured during the TX
- * @param [out] time_recovery  time taken to the supply rail to reach Vnom after th TX shutdown
- */
-void smtc_board_measure_battery_drop( uint8_t stack_id, int32_t* drop, uint32_t* time_recovery );
-
-/*!
- * @brief Get the oldest and the newest almanac date from the LR11XX
- *
- * @param [in] context Radio abstraction
- * @param [out] oldest_almanac_date oldest sv date
- * @param [out] newest_almanac_date newest sv date
- *
- * @return true if almanacs dates have been recovered, false if not
- */
-bool smtc_board_get_almanac_dates( const void* context, uint32_t* oldest_almanac_date, uint32_t* newest_almanac_date );
 
 /**
  * @brief Reset the radio

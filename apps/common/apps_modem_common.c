@@ -143,7 +143,7 @@ uint32_t apps_modem_common_get_utc_time( void )
     {
     case SMTC_MODEM_RC_OK:
     {
-        time_utc = ( time_t ) ( gps_time_s + OFFSET_BETWEEN_GPS_EPOCH_AND_UNIX_EPOCH - OFFSET_LEAP_SECONDS );
+        time_utc = ( time_t )( gps_time_s + OFFSET_BETWEEN_GPS_EPOCH_AND_UNIX_EPOCH - OFFSET_LEAP_SECONDS );
 
         char             buf[TIME_BUFFER_SIZE];
         const struct tm* time = localtime( &time_utc );  // localtime() is used here instead of gmtime() because the
@@ -157,16 +157,18 @@ uint32_t apps_modem_common_get_utc_time( void )
     case SMTC_MODEM_RC_NO_TIME:
     {
         HAL_DBG_TRACE_WARNING( "No time available.\n" );
+        time_utc = 0;
         break;
     }
     default:
     {
         HAL_DBG_TRACE_ERROR( "Cannot get time from modem\n" );
+        time_utc = 0;
         break;
     }
     }
 
-    return time_utc;
+    return ( ( uint32_t ) time_utc );
 }
 
 uint32_t apps_modem_common_convert_gps_to_utc_time( uint32_t gps_time_s )

@@ -46,19 +46,20 @@
 /* Entry Point */
 ENTRY(Reset_Handler)
 
-/* Highest address of the user mode stack */
-_estack = 0x20030000;    /* end of RAM */
-/* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0x500 ;      /* required amount of heap  */
-_Min_Stack_Size = 0x1000 ;   /* required amount of stack */
-
 /* Specify the memory areas */
 MEMORY
 {
 FLASH (rx)                 : ORIGIN = 0x08007000, LENGTH = 512K
-RAM1 (xrw)                 : ORIGIN = 0x20000008, LENGTH = 0x2FFF8
+RAM1 (xrw)                 : ORIGIN = 0x20000008, LENGTH = 0x2FF78
+NOINITRAM1 (xrw)           : ORIGIN = 0x2002FF80, LENGTH = 0x80
 RAM_SHARED (xrw)           : ORIGIN = 0x20030000, LENGTH = 10K
 }
+
+/* Highest address of the user mode stack */
+_estack = ORIGIN(RAM1) + LENGTH(RAM1);;    /* end of RAM */
+/* Generate a link error if heap and stack don't fit into RAM */
+_Min_Heap_Size = 0x500 ;      /* required amount of heap  */
+_Min_Stack_Size = 0x1000 ;   /* required amount of stack */
 
 /* Define output sections */
 SECTIONS
@@ -170,18 +171,42 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM1
 
-  /* User_heap_stack section, used to check that there is enough RAM left */
-  ._user_heap_stack :
+  .noinit (NOLOAD) :
   {
-    . = ALIGN(8);
-    PROVIDE ( end = . );
-    PROVIDE ( _end = . );
-    . = . + _Min_Heap_Size;
-    . = . + _Min_Stack_Size;
-    . = ALIGN(8);
+    . = ALIGN(4);
+    __snoinit_start__ = .;
+    _snoinit = .;
+    KEEP(*(.noinit*))
+    . = ALIGN(4);
+    __enoinit_stop__ = .;
+    _enoinit = .;
+    . = ALIGN(4);
+  } >NOINITRAM1
+
+  .heap :
+  {
+      . = ALIGN(8);
+      PROVIDE ( end = . );
+      _sheap = . ;
+      __heap_start__ = _sheap;
+      __HeapBase = _sheap;
+      . = . + _Min_Heap_Size;
+      . = ALIGN(8);
+      _eheap = . ;
+      __heap_end__ = _eheap;
+      __HeapLimit = _eheap;
   } >RAM1
 
-  
+  .stack :
+  {
+    . = ALIGN(8);
+    _sstack = .;
+    __stack_start__ = _sstack;
+    stack_size = _estack - ABSOLUTE(_sstack);
+    . = . + MAX(_Min_Stack_Size, stack_size);
+    . = ALIGN(8);
+    __stack_end__ = .;
+  } >RAM1
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

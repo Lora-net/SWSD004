@@ -135,14 +135,14 @@ typedef struct hal_rtc_s
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-hal_rtc_t hal_rtc;
+hal_rtc_t hal_rtc = { 0 };
 
 static volatile bool wut_timer_irq_happened = false;
 
 /*!
  * @brief RTC Alarm
  */
-static RTC_AlarmTypeDef rtc_alarm;
+static RTC_AlarmTypeDef rtc_alarm = { 0 };
 
 /*!
  * @brief Number of days in each month on a normal year
@@ -239,7 +239,7 @@ void hal_rtc_init( void )
        registers) */
     HAL_RTCEx_EnableBypassShadow( &hal_rtc.handle );
 
-    HAL_NVIC_SetPriority( RTC_Alarm_IRQn, 1, 0 );
+    HAL_NVIC_SetPriority( RTC_Alarm_IRQn, 0, 0 );
     HAL_NVIC_EnableIRQ( RTC_Alarm_IRQn );
 
     /* Init alarm. */
@@ -264,7 +264,15 @@ uint32_t hal_rtc_get_time_100us( void )
     return seconds * 10000 + milliseconds_div_10;
 }
 
-uint32_t hal_rtc_get_time_ms( void ) { return ( hal_rtc_get_time_100us( ) / 10 ); }
+uint32_t hal_rtc_get_time_ms( void )
+{ 
+    uint32_t seconds             = 0;
+    uint16_t milliseconds_div_10 = 0;
+
+    seconds = hal_rtc_get_calendar_time( &milliseconds_div_10 );
+
+    return seconds * 1000 + ( milliseconds_div_10 / 10 );
+ }
 
 void hal_rtc_stop_alarm( void )
 {
@@ -470,7 +478,7 @@ uint32_t hal_rtc_tick_2_100_us( const uint32_t tick )
     uint32_t seconds    = tick >> N_PREDIV_S;
     uint32_t local_tick = tick & PREDIV_S;
 
-    return ( uint32_t )( ( seconds * 1000 ) + ( ( local_tick * 10000 ) >> N_PREDIV_S ) );
+    return ( uint32_t )( ( seconds * 10000 ) + ( ( local_tick * 10000 ) >> N_PREDIV_S ) );
 }
 
 uint32_t hal_rtc_tick_2_ms( const uint32_t tick )
@@ -554,7 +562,7 @@ static uint64_t rtc_get_timestamp_in_ticks( RTC_DateTypeDef* date, RTC_TimeTypeD
     uint32_t seconds;
 
     /* Make sure it is correct due to asynchronous nature of RTC */
-    volatile uint32_t ssr;
+    uint32_t ssr;
 
     do
     {

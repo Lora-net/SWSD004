@@ -78,14 +78,14 @@
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
 
-bool lr11xx_configure_for_scan( const void* ral_context )
+bool mw_radio_configure_for_scan( const void* radio_context )
 {
     lr11xx_status_t           status;
     lr11xx_system_errors_t    errors;
     lr11xx_system_lfclk_cfg_t lf_clock_cfg = mw_bsp_get_lr11xx_lf_clock_cfg( );
 
     // Clear potential old errors
-    status = lr11xx_system_clear_errors( ral_context );
+    status = lr11xx_system_clear_errors( radio_context );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Fail to clear error\n" );
@@ -93,7 +93,7 @@ bool lr11xx_configure_for_scan( const void* ral_context )
     }
 
     // Configure lf clock
-    status = lr11xx_system_cfg_lfclk( ral_context, lf_clock_cfg, true );
+    status = lr11xx_system_cfg_lfclk( radio_context, lf_clock_cfg, true );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Fail to config lfclk\n" );
@@ -101,7 +101,7 @@ bool lr11xx_configure_for_scan( const void* ral_context )
     }
 
     // Get errors
-    status = lr11xx_system_get_errors( ral_context, &errors );
+    status = lr11xx_system_get_errors( radio_context, &errors );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Fail to get lr11xx error\n" );
@@ -119,18 +119,18 @@ bool lr11xx_configure_for_scan( const void* ral_context )
     return true;
 }
 
-void lr11xx_set_sleep( const void* ral_context )
+void mw_radio_set_sleep( const void* radio_context )
 {
     lr11xx_system_sleep_cfg_t radio_sleep_cfg;
 
     radio_sleep_cfg.is_warm_start  = true;
     radio_sleep_cfg.is_rtc_timeout = false;
 
-    if( lr11xx_system_cfg_lfclk( ral_context, LR11XX_SYSTEM_LFCLK_RC, true ) != LR11XX_STATUS_OK )
+    if( lr11xx_system_cfg_lfclk( radio_context, LR11XX_SYSTEM_LFCLK_RC, true ) != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set LF clock\n" );
     }
-    if( lr11xx_system_set_sleep( ral_context, radio_sleep_cfg, 0 ) != LR11XX_STATUS_OK )
+    if( lr11xx_system_set_sleep( radio_context, radio_sleep_cfg, 0 ) != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set the radio to sleep\n" );
     }

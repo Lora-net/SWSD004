@@ -43,6 +43,7 @@
 #include "gnss_version.h"
 #include "gnss_middleware.h"
 #include "gnss_helpers.h"
+#include "gnss_queue.h"
 
 #include "mw_assert.h"
 #include "mw_dbg_trace.h"
@@ -110,6 +111,11 @@
  * @brief Solver aiding position buffer size (1byte for TAG and 3 for position)
  */
 #define SOLVER_AIDING_POSITION_SIZE 4
+
+/**
+ * @brief The LoRa Basics Modem extended uplink ID to be used for GNSS uplinks (TASK_EXTENDED_1)
+ */
+#define SMTC_MODEM_EXTENDED_UPLINK_ID_GNSS 1
 
 /*
  * -----------------------------------------------------------------------------
@@ -256,9 +262,13 @@ static gnss_mw_scan_context_t lr11xx_scan_context;
  */
 
 /*!
- * @brief Program the next scan of the scan group, with a delay defined in the current selected scan mode
+ * @brief Program the next scan of the scan group, with the specified delay
+ *
+ * @param [in] delay_s Delay in seconds to start the scan
+ *
+ * @return the error code as returned by the modem / radio planner
  */
-static void gnss_mw_scan_next( void );
+static smtc_modem_return_code_t gnss_mw_scan_next( uint32_t delay_s );
 
 /*!
  * @brief Interrupt handler signaled by the Radio Planner when the radio is available and it is time to start the scan
@@ -351,14 +361,24 @@ mw_return_code_t gnss_mw_init( ralf_t* modem_radio, uint8_t stack_id )
 mw_return_code_t gnss_mw_scan_start( gnss_mw_mode_t mode, uint32_t start_delay )
 {
     smtc_modem_return_code_t modem_rc;
-    smtc_modem_rp_task_t     rp_task;
-    uint32_t                 time_ms, delay_ms;
     bool                     scan_group_err;
+
+    if( modem_radio_ctx == NULL )
+    {
+        MW_DBG_TRACE_ERROR( "GNSS middleware not ready, cannot start scan\n" );
+        return MW_RC_FAILED;
+    }
+
+    if( mode >= __GNSS_MW_MODE__SIZE )
+    {
+        MW_DBG_TRACE_ERROR( "Wrong parameter, mode %d is not supported\n", mode );
+        return MW_RC_FAILED;
+    }
 
     /* Check a sequence sequence is already running (meaning the RP task has been launched) */
     if( task_running == true )
     {
-        MW_DBG_TRACE_ERROR( "GNSS scan on-going. Cancel it before starting a new one\n" );
+        MW_DBG_TRACE_ERROR( "GNSS scan on-going, cannot start a new scan yet\n" );
         return MW_RC_BUSY;
     }
 
@@ -371,10 +391,13 @@ mw_return_code_t gnss_mw_scan_start( gnss_mw_mode_t mode, uint32_t start_delay )
     /* Reset pending events */
     pending_events = 0;
 
+    /* Reset any pending cancel request which has not been completed (error case) */
+    task_cancelled_by_user = false;
+
     /* Initialize new scan group */
-    MW_DBG_TRACE_PRINTF( "New scan group for %s scan (%s)\n",
+    MW_DBG_TRACE_PRINTF( "New scan group for %s scan (%s) - %us\n",
                          ( aiding_position_received == false ) ? "autonomous" : "assisted",
-                         ( scan_group_mode == GNSS_SCAN_GROUP_MODE_DEFAULT ) ? "DEFAULT" : "SENSITIVITY" );
+                         ( scan_group_mode == GNSS_SCAN_GROUP_MODE_DEFAULT ) ? "DEFAULT" : "SENSITIVITY", start_delay );
     if( aiding_position_received == false )
     {
         scan_group_err =
@@ -392,23 +415,9 @@ mw_return_code_t gnss_mw_scan_start( gnss_mw_mode_t mode, uint32_t start_delay )
     }
 
     /* Prepare the task for next scan */
-    time_ms  = smtc_modem_hal_get_time_in_ms( ) + 300; /* 300ms for scheduling delay */
-    delay_ms = start_delay * 1000;
-
-    rp_task.type                 = SMTC_MODEM_RP_TASK_STATE_ASAP;
-    rp_task.start_time_ms        = time_ms + delay_ms;
-    rp_task.duration_time_ms     = 10 * 1000;
-    rp_task.id                   = RP_TASK_GNSS;
-    rp_task.launch_task_callback = gnss_mw_scan_rp_task_launch;
-    rp_task.end_task_callback    = gnss_mw_scan_rp_task_done;
-    modem_rc                     = smtc_modem_rp_add_user_radio_access_task( &rp_task );
-    if( modem_rc == SMTC_MODEM_RC_OK )
+    modem_rc = gnss_mw_scan_next( start_delay );
+    if( modem_rc != SMTC_MODEM_RC_OK )
     {
-        MW_DBG_TRACE_INFO( "RP_TASK_GNSS - new scan group - task queued at %u + %u\n", time_ms, delay_ms );
-    }
-    else
-    {
-        MW_DBG_TRACE_ERROR( "Failed to queue GNSS scan task (0x%02X)\n", modem_rc );
         return MW_RC_FAILED;
     }
 
@@ -515,20 +524,22 @@ mw_return_code_t gnss_mw_get_event_data_scan_done( gnss_mw_event_data_scan_done_
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_SCAN_DONE ) )
     {
-        data->is_valid      = gnss_scan_group_queue_is_valid( &gnss_scan_group_queue );
-        data->token         = gnss_scan_group_queue.token;
-        data->nb_scan_valid = gnss_scan_group_queue.nb_scan_valid;
-        for( uint8_t i = 0; i < gnss_scan_group_queue.nb_scan_valid; i++ )
+        data->is_valid       = gnss_scan_group_queue_is_valid( &gnss_scan_group_queue );
+        data->token          = gnss_scan_group_queue.token;
+        data->nb_scans_valid = gnss_scan_group_queue.nb_scans_valid;
+        /* Note: nb_scans_valid is <= GNSS_SCAN_GROUP_SIZE_MAX */
+        for( uint8_t i = 0; i < gnss_scan_group_queue.nb_scans_valid; i++ )
         {
-            data->scan[i].nav       = &gnss_scan_group_queue.scan[i].results_buffer[GNSS_SCAN_METADATA_SIZE];
-            data->scan[i].nav_size  = gnss_scan_group_queue.scan[i].results_size;
-            data->scan[i].nav_valid = gnss_scan_group_queue.scan[i].nav_valid;
-            data->scan[i].timestamp = gnss_scan_group_queue.scan[i].timestamp;
-            data->scan[i].nb_sv     = gnss_scan_group_queue.scan[i].detected_sv;
-            for( uint8_t j = 0; j < gnss_scan_group_queue.scan[i].detected_sv; j++ )
+            data->scans[i].nav       = &gnss_scan_group_queue.scans[i].results_buffer[GNSS_SCAN_METADATA_SIZE];
+            data->scans[i].nav_size  = gnss_scan_group_queue.scans[i].results_size;
+            data->scans[i].nav_valid = gnss_scan_group_queue.scans[i].nav_valid;
+            data->scans[i].timestamp = gnss_scan_group_queue.scans[i].timestamp;
+            data->scans[i].nb_svs    = gnss_scan_group_queue.scans[i].detected_svs;
+            /* Note: detected_sv is <= GNSS_NB_SVS_MAX */
+            for( uint8_t j = 0; j < gnss_scan_group_queue.scans[i].detected_svs; j++ )
             {
-                data->scan[i].info_sv[j].sv_id = gnss_scan_group_queue.scan[i].info_sv[j].satellite_id;
-                data->scan[i].info_sv[j].cnr   = gnss_scan_group_queue.scan[i].info_sv[j].cnr;
+                data->scans[i].info_svs[j].sv_id = gnss_scan_group_queue.scans[i].info_svs[j].satellite_id;
+                data->scans[i].info_svs[j].cnr   = gnss_scan_group_queue.scans[i].info_svs[j].cnr;
             }
         }
         data->power_consumption_uah             = gnss_scan_group_queue.power_consumption_uah;
@@ -581,37 +592,41 @@ void gnss_mw_send_bypass( bool no_send )
     send_bypass = no_send;
 }
 
-void gnss_mw_display_results( gnss_mw_event_data_scan_done_t data )
+void gnss_mw_display_results( const gnss_mw_event_data_scan_done_t* data )
 {
     uint8_t i, j;
 
-    MW_DBG_TRACE_PRINTF( "SCAN_DONE info:\n" );
-    MW_DBG_TRACE_PRINTF( "-- token: 0x%02X\n", data.token );
-    MW_DBG_TRACE_PRINTF( "-- is_valid: %d\n", data.is_valid );
-    MW_DBG_TRACE_PRINTF( "-- number of valid scans: %u\n", data.nb_scan_valid );
-    for( i = 0; i < data.nb_scan_valid; i++ )
+    if( data != NULL )
     {
-        MW_DBG_TRACE_PRINTF( "-- scan[%d][%u] (%u SV - %d): ", i, data.scan[i].timestamp, data.scan[i].nb_sv,
-                             data.scan[i].nav_valid );
-        for( j = 0; j < data.scan[i].nav_size; j++ )
+        MW_DBG_TRACE_PRINTF( "SCAN_DONE info:\n" );
+        MW_DBG_TRACE_PRINTF( "-- token: 0x%02X\n", data->token );
+        MW_DBG_TRACE_PRINTF( "-- is_valid: %d\n", data->is_valid );
+        MW_DBG_TRACE_PRINTF( "-- number of valid scans: %u\n", data->nb_scans_valid );
+        for( i = 0; i < data->nb_scans_valid; i++ )
         {
-            MW_DBG_TRACE_PRINTF( "%02X", data.scan[i].nav[j] );
+            MW_DBG_TRACE_PRINTF( "-- scan[%d][%u] (%u SV - %d): ", i, data->scans[i].timestamp, data->scans[i].nb_svs,
+                                 data->scans[i].nav_valid );
+            for( j = 0; j < data->scans[i].nav_size; j++ )
+            {
+                MW_DBG_TRACE_PRINTF( "%02X", data->scans[i].nav[j] );
+            }
+            MW_DBG_TRACE_PRINTF( "\n" );
+            for( j = 0; j < data->scans[i].nb_svs; j++ )
+            {
+                MW_DBG_TRACE_PRINTF( "   SV_ID %u:\t%ddB\n", data->scans[i].info_svs[j].sv_id,
+                                     data->scans[i].info_svs[j].cnr );
+            }
         }
-        MW_DBG_TRACE_PRINTF( "\n" );
-        for( j = 0; j < data.scan[i].nb_sv; j++ )
+        MW_DBG_TRACE_PRINTF( "-- power consumption: %u uah\n", data->power_consumption_uah );
+        MW_DBG_TRACE_PRINTF( "-- mode: %d\n", data->context.mode );
+        MW_DBG_TRACE_PRINTF( "-- assisted: %d\n", data->context.assisted );
+        if( data->context.assisted == true )
         {
-            MW_DBG_TRACE_PRINTF( "   SV_ID %u:\t%ddB\n", data.scan[i].info_sv[j].sv_id, data.scan[i].info_sv[j].cnr );
+            MW_DBG_TRACE_PRINTF( "-- aiding position: (%.6f, %.6f)\n", data->context.aiding_position_latitude,
+                                 data->context.aiding_position_longitude );
         }
+        MW_DBG_TRACE_PRINTF( "-- almanac CRC: 0X%08X\n\n", data->context.almanac_crc );
     }
-    MW_DBG_TRACE_PRINTF( "-- power consumption: %u uah\n", data.power_consumption_uah );
-    MW_DBG_TRACE_PRINTF( "-- mode: %d\n", data.context.mode );
-    MW_DBG_TRACE_PRINTF( "-- assisted: %d\n", data.context.assisted );
-    if( data.context.assisted == true )
-    {
-        MW_DBG_TRACE_PRINTF( "-- aiding position: (%.6f, %.6f)\n", data.context.aiding_position_latitude,
-                             data.context.aiding_position_longitude );
-    }
-    MW_DBG_TRACE_PRINTF( "-- almanac CRC: 0X%08X\n\n", data.context.almanac_crc );
 }
 
 mw_return_code_t gnss_mw_get_event_data_terminated( gnss_mw_event_data_terminated_t* data )
@@ -626,12 +641,12 @@ mw_return_code_t gnss_mw_get_event_data_terminated( gnss_mw_event_data_terminate
     {
         if( send_bypass == false )
         {
-            data->nb_scan_sent = gnss_scan_group_queue.nb_scan_sent;
+            data->nb_scans_sent = gnss_scan_group_queue.nb_scans_sent;
         }
         else
         {
             /* assume that the "no send" mode was configured before starting the scan, so no packet sent */
-            data->nb_scan_sent = 0;
+            data->nb_scans_sent = 0;
         }
 
         return MW_RC_OK;
@@ -650,13 +665,14 @@ void gnss_mw_clear_pending_events( void ) { pending_events = 0; }
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
  */
 
-static void gnss_mw_scan_next( void )
+static smtc_modem_return_code_t gnss_mw_scan_next( uint32_t delay_s )
 {
-    smtc_modem_rp_task_t rp_task;
-    uint32_t             time_ms, delay_ms;
+    smtc_modem_rp_task_t     rp_task = { 0 };
+    smtc_modem_return_code_t modem_rc;
+    uint32_t                 time_ms, delay_ms;
 
     time_ms  = smtc_modem_hal_get_time_in_ms( ) + 300; /* 300ms for scheduling delay */
-    delay_ms = ( modes[current_mode_index].scan_group_delay * 1000 );
+    delay_ms = delay_s * 1000;
 
     rp_task.type                 = SMTC_MODEM_RP_TASK_STATE_ASAP;
     rp_task.start_time_ms        = time_ms + delay_ms;
@@ -664,8 +680,17 @@ static void gnss_mw_scan_next( void )
     rp_task.id                   = RP_TASK_GNSS;
     rp_task.launch_task_callback = gnss_mw_scan_rp_task_launch;
     rp_task.end_task_callback    = gnss_mw_scan_rp_task_done;
-    MW_ASSERT_SMTC_MODEM_RC( smtc_modem_rp_add_user_radio_access_task( &rp_task ) );
-    GNSS_MW_TIME_CRITICAL_TRACE_PRINTF( "RP_TASK_GNSS - next scan - task queued at %u + %u\n", time_ms, delay_ms );
+    modem_rc                     = smtc_modem_rp_add_user_radio_access_task( &rp_task );
+    if( modem_rc == SMTC_MODEM_RC_OK )
+    {
+        GNSS_MW_TIME_CRITICAL_TRACE_PRINTF( "RP_TASK_GNSS - scan task queued at %u + %u\n", time_ms, delay_ms );
+    }
+    else
+    {
+        MW_DBG_TRACE_ERROR( "RP_TASK_GNSS - failed to queue scan task (0x%02X)\n", modem_rc );
+    }
+
+    return modem_rc;
 }
 
 static void gnss_mw_scan_rp_task_launch( void* context )
@@ -686,7 +711,8 @@ static void gnss_mw_scan_rp_task_launch( void* context )
         /* Set assistance position if an update is pending */
         if( user_aiding_position_update_received == true )
         {
-            if( smtc_gnss_set_assistance_position( modem_radio_ctx->ral.context, user_aiding_position_update ) == true )
+            if( smtc_gnss_set_assistance_position( modem_radio_ctx->ral.context, &user_aiding_position_update ) ==
+                true )
             {
                 GNSS_MW_TIME_CRITICAL_TRACE_PRINTF( "User assistance position set to (%.6f, %.6f)\n",
                                                     user_aiding_position_update.latitude,
@@ -788,7 +814,7 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
             {
                 MW_DBG_TRACE_WARNING( "RP_TASK_GNSS(%d) - task aborted by RP\n", __LINE__ );
                 /* Program next GNSS scan */
-                gnss_mw_scan_next( );
+                MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( modes[current_mode_index].scan_group_delay ) );
             }
             else
             {
@@ -822,12 +848,10 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     }
     else if( irq_status == SMTC_RP_RADIO_GNSS_SCAN_DONE )
     {
-        gnss_scan_t                         scan_results;
+        gnss_scan_t                         scan_results = { 0 };
         smtc_gnss_get_results_return_code_t scan_results_rc;
 
         /* Get scan results from LR1110 */
-        memset( &scan_results, 0, sizeof scan_results );
-        /* Timestamp this scan */
         scan_results.timestamp = mw_get_gps_time( );
         scan_results_rc =
             smtc_gnss_get_results( modem_radio_ctx->ral.context, GNSS_RESULT_SIZE_MAX_MODE3, &scan_results.results_size,
@@ -841,11 +865,12 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
         if( scan_results_rc == SMTC_GNSS_GET_RESULTS_NO_ERROR )
         {
             /* Get detailed info about the scan */
-            smtc_gnss_get_sv_info( modem_radio_ctx->ral.context, &scan_results.detected_sv, scan_results.info_sv );
+            smtc_gnss_get_sv_info( modem_radio_ctx->ral.context, GNSS_NB_SVS_MAX, &scan_results.detected_svs,
+                                   scan_results.info_svs );
 
             /* Check if the NAV message is valid (the solver can use this single NAV to get a position) */
-            scan_results.nav_valid = smtc_gnss_is_nav_message_valid( current_constellations, scan_results.detected_sv,
-                                                                     scan_results.info_sv );
+            scan_results.nav_valid = smtc_gnss_is_nav_message_valid( current_constellations, scan_results.detected_svs,
+                                                                     scan_results.info_svs );
 
             /* Push scan to the scan group */
             gnss_scan_group_queue_push( &gnss_scan_group_queue, &scan_results );
@@ -854,7 +879,7 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
             if( gnss_scan_group_queue_is_full( &gnss_scan_group_queue ) == false )
             {
                 /* Program next GNSS scan */
-                gnss_mw_scan_next( );
+                MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( modes[current_mode_index].scan_group_delay ) );
             }
             else
             {
@@ -911,7 +936,7 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     }
 
     /* Set the radio back to sleep */
-    lr11xx_set_sleep( modem_radio_ctx->ral.context );
+    mw_radio_set_sleep( modem_radio_ctx->ral.context );
 }
 
 /*!
@@ -990,8 +1015,9 @@ static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx
     }
 
     /* Send uplink */
-    modem_response_code = smtc_modem_request_extended_uplink( modem_stack_id, lorawan_port, false, tx_frame_buffer,
-                                                              tx_frame_buffer_size, 1, &gnss_mw_tx_done_callback );
+    modem_response_code =
+        smtc_modem_request_extended_uplink( modem_stack_id, lorawan_port, false, tx_frame_buffer, tx_frame_buffer_size,
+                                            SMTC_MODEM_EXTENDED_UPLINK_ID_GNSS, &gnss_mw_tx_done_callback );
     if( modem_response_code == SMTC_MODEM_RC_OK )
     {
         MW_DBG_TRACE_INFO( "Request uplink:\n" );

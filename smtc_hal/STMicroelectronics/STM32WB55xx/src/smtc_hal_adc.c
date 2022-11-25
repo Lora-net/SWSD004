@@ -79,7 +79,7 @@ static uint16_t adc_read( uint32_t channel, uint32_t sampling_time );
 void hal_adc_init( void )
 {
     hal_adc_handle.Instance                   = ADC1;
-    hal_adc_handle.Init.ClockPrescaler        = ADC_CLOCK_ASYNC_DIV12;
+    hal_adc_handle.Init.ClockPrescaler        = ADC_CLOCK_ASYNC_DIV4;
     hal_adc_handle.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
     hal_adc_handle.Init.Resolution            = ADC_RESOLUTION_12B;
     hal_adc_handle.Init.ScanConvMode          = ADC_SCAN_DISABLE;
@@ -110,8 +110,8 @@ void hal_adc_init( void )
 
 uint16_t hal_adc_get_vref_int( void )
 {
-    // 6.5 cycle == 1µs (6.5 x 12 / 80)
-    uint16_t adc_val = adc_read( ADC_CHANNEL_VREFINT, ADC_SAMPLETIME_6CYCLES_5 );
+    // 12.5 cycles == 1.5µs (12.5 x 4 / 32)
+    uint16_t adc_val = adc_read( ADC_CHANNEL_VREFINT, ADC_SAMPLETIME_12CYCLES_5 );
 
     return ( uint16_t ) __HAL_ADC_CALC_VREFANALOG_VOLTAGE( adc_val, ADC_RESOLUTION_12B );
 }
@@ -121,8 +121,8 @@ int8_t hal_adc_get_vbat( void )
     // Update vref for more precise measure
     uint16_t vref_int_mv = hal_adc_get_vref_int( );
 
-    // 6.5 cycle == 1µs (6.5 x 12 / 80)
-    uint16_t adc_val = adc_read( ADC_CHANNEL_VBAT, ADC_SAMPLETIME_6CYCLES_5 );
+    // 12.5 cycles == 1.5µs (12.5 x 4 / 32)
+    uint16_t adc_val = adc_read( ADC_CHANNEL_VBAT, ADC_SAMPLETIME_12CYCLES_5 );
     uint16_t vbat    = __HAL_ADC_CALC_DATA_TO_VOLTAGE( vref_int_mv, adc_val, ADC_RESOLUTION_12B );
     return vbat;
 }
@@ -133,7 +133,7 @@ int8_t hal_adc_get_temp( void )
     uint16_t vref_int_mv = hal_adc_get_vref_int( );
 
     // Internal temperature sensor needs at least 5µs to be measured properly
-    // ADC is clock at 6.66 MHz (80Mhz / 12) so 5µs is 33.3 cycle --> we choose 47.5 cycles (7.125µs)
+    // ADC is clock at 8 MHz (32Mhz / 4) so 5µs is 40 cycles --> we choose 47.5 cycles (5.93µs)
     uint16_t adc_val     = adc_read( ADC_CHANNEL_TEMPSENSOR, ADC_SAMPLETIME_47CYCLES_5 );
     int32_t  temperature = __HAL_ADC_CALC_TEMPERATURE( vref_int_mv, adc_val, ADC_RESOLUTION_12B );
 
@@ -171,29 +171,23 @@ static uint16_t adc_read( uint32_t channel, uint32_t sampling_time )
     adc_channel_conf.SamplingTime = sampling_time;
     adc_channel_conf.Rank         = ADC_REGULAR_RANK_1;
 
-    if( HAL_ADC_ConfigChannel( &hal_adc_handle, &adc_channel_conf ) != HAL_OK )
+    if( HAL_ADC_ConfigChannel( &hal_adc_handle, &adc_channel_conf ) == HAL_OK )
     {
-        return 0;
-    }
+        if( HAL_ADC_Start( &hal_adc_handle ) == HAL_OK )
+        {
+            if( HAL_ADC_PollForConversion( &hal_adc_handle, 10 ) == HAL_OK )
+            {
+                if( ( HAL_ADC_GetState( &hal_adc_handle ) & HAL_ADC_STATE_REG_EOC ) == HAL_ADC_STATE_REG_EOC )
+                {
+                    adc_value = HAL_ADC_GetValue( &hal_adc_handle );
 
-    if( HAL_ADC_Start( &hal_adc_handle ) != HAL_OK )
-    {
-        return 0;
-    }
-
-    if( HAL_ADC_PollForConversion( &hal_adc_handle, 10 ) != HAL_OK )
-    {
-        return 0;
-    }
-
-    if( ( HAL_ADC_GetState( &hal_adc_handle ) & HAL_ADC_STATE_REG_EOC ) == HAL_ADC_STATE_REG_EOC )
-    {
-        adc_value = HAL_ADC_GetValue( &hal_adc_handle );
-    }
-
-    if( HAL_ADC_Stop( &hal_adc_handle ) != HAL_OK )
-    {
-        return 0;
+                    if( HAL_ADC_Stop( &hal_adc_handle ) != HAL_OK )
+                    {
+                        adc_value = 0;
+                    }
+                }
+            }
+        }
     }
 
     return adc_value;

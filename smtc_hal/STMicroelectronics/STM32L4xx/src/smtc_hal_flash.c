@@ -117,7 +117,8 @@ smtc_hal_status_t hal_flash_init( void )
         }
         index_page++;  // Check next page
     }
-    flash_user_start_addr = ADDR_FLASH_PAGE_0 + ( ( index_page - 1 ) * ADDR_FLASH_PAGE_SIZE );
+    /* Let a blank page between code space and user space */
+    flash_user_start_addr = ADDR_FLASH_PAGE_0 + ( index_page * ADDR_FLASH_PAGE_SIZE );
 
     return status;
 }
@@ -249,14 +250,8 @@ uint8_t hal_flash_force_erase_page( uint32_t addr, uint8_t nb_page )
           PageError will contain the faulty  and then to know the code error on this ,
           user can call function 'HAL_FLASH_GetError()'
         */
-        /* Infinite loop */
-        while( 1 )
-        {
-        }
-    }
-    else
-    {
-        flash_operation_retry = 0;
+        HAL_DBG_TRACE_ERROR( "FLASH_OPERATION_MAX_RETRY\r\n" );
+        mcu_panic( );
     }
 
     /* Lock the Flash to disable the flash control register access (recommended
@@ -300,6 +295,10 @@ smtc_hal_status_t hal_flash_write_buffer( uint32_t addr, const uint8_t* buffer, 
 
     if( ( flash_user_start_addr > addr ) || ( ( real_size / ADDR_FLASH_PAGE_SIZE ) > nb_of_pages_max ) )
     {
+        /* Lock the Flash to disable the flash control register access (recommended
+        to protect the FLASH memory against possible unwanted operation) *********/
+        HAL_FLASH_Lock( );
+
         status = SMTC_HAL_FAILURE;
         return status;
     }
@@ -317,7 +316,13 @@ smtc_hal_status_t hal_flash_write_buffer( uint32_t addr, const uint8_t* buffer, 
 
         do
         {
+            uint8_t read_buffer[8];
+
             hal_status = HAL_FLASH_Program( FLASH_TYPEPROGRAM_DOUBLEWORD, addr, data64 );
+
+            /* Do a read after each write to be sure that data have been written before go in low power */
+            hal_flash_read_buffer( addr, read_buffer, 8 );
+
             flash_operation_retry++;
         } while( ( hal_status != HAL_OK ) && ( flash_operation_retry < FLASH_OPERATION_MAX_RETRY ) );
 
@@ -325,10 +330,7 @@ smtc_hal_status_t hal_flash_write_buffer( uint32_t addr, const uint8_t* buffer, 
         {
             /* Error occurred while writing data in Flash memory.
             User can add here some code to deal with this error */
-            /* Infinite loop */
-            while( 1 )
-            {
-            }
+            mcu_panic( );
         }
         else
         {

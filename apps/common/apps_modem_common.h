@@ -79,7 +79,7 @@ uint32_t apps_modem_common_get_gps_time( void );
 /*!
  * @brief Get the UTC time from the modem
  *
- * @returns UTC time in second
+ * @returns UTC time in second, if no time available returns 0
  */
 uint32_t apps_modem_common_get_utc_time( void );
 

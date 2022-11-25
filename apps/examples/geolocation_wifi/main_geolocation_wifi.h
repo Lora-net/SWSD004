@@ -72,19 +72,10 @@ extern "C" {
  */
 
 /*!
- * @brief ADR custom list and retransmission parameters for EU868 region
+ * @brief ADR custom list and retransmission parameters for EU868 / IN865 / RU864 / AU915 / CN470 /AS923 / KR920 regions
  */
-#define CUSTOM_NB_TRANS_EU868 1
-#define ADR_CUSTOM_LIST_EU868                          \
-    {                                                  \
-        5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3 \
-    } /* 125kHz - SF7, SF8, SF9 */
-
-/*!
- * @brief ADR custom list and retransmission parameters for CN470 region
- */
-#define CUSTOM_NB_TRANS_CN470 2
-#define ADR_CUSTOM_LIST_CN470                          \
+#define CUSTOM_NB_TRANS_DR5_DR3 2
+#define ADR_CUSTOM_LIST_DR5_DR3                        \
     {                                                  \
         5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3 \
     } /* 125kHz - SF7, SF8, SF9 */
@@ -97,6 +88,15 @@ extern "C" {
     {                                                  \
         3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1, 1 \
     } /* 125kHz - SF7, SF8, SF9 */
+
+/*!
+ * @brief ADR custom list and retransmission parameters for WW2G4 region
+ */
+#define CUSTOM_NB_TRANS_WW2G4 2
+#define ADR_CUSTOM_LIST_WW2G4                          \
+    {                                                  \
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 \
+    } /* SF12 */
 
 #ifndef LED_PERIOD_MS
 #define LED_PERIOD_MS LED_PERIOD_MS_DEFAULT

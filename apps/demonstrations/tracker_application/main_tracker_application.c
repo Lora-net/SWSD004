@@ -174,7 +174,7 @@ static void tracker_app_build_and_send_tracker_settings( const uint8_t* buffer, 
  *
  * @param [in] gnss_scan_results GNSS scan results \ref gnss_mw_event_data_scan_done_t
  */
-static void tracker_gnss_store_new_assistance_position( gnss_mw_event_data_scan_done_t gnss_scan_results );
+static void tracker_gnss_store_new_assistance_position( gnss_mw_event_data_scan_done_t* gnss_scan_results );
 
 /*!
  * @brief Get, Check and display the lr11xx firmware version
@@ -190,6 +190,14 @@ static void tracker_app_display_lbm_version( void );
  * @brief Set the ADR according to the used region
  */
 static void tracker_app_set_adr( void );
+
+/**
+ * @brief Set the maximum TX output power following the region used
+ *
+ * @param [in] region the region used by the modem, see \ref smtc_modem_region_t
+ * @param [in] sub_region the sub region used by the modem, see \ref smtc_modem_sub_region_t
+ */
+static void tracker_app_set_max_tx_power_supported( smtc_modem_region_t region, smtc_modem_sub_region_t sub_region );
 
 /*!
  * @addtogroup basics_modem_evt_callback
@@ -387,22 +395,22 @@ int main( void )
  * --- TRACKER GNSS FUNCTION TYPES ---------------------------------------------
  */
 
-static void tracker_gnss_store_new_assistance_position( gnss_mw_event_data_scan_done_t gnss_scan_results )
+static void tracker_gnss_store_new_assistance_position( gnss_mw_event_data_scan_done_t* gnss_scan_results )
 {
     float latitude_dif, longitude_dif;
 
     latitude_dif =
-        fabs( gnss_scan_results.context.aiding_position_latitude - tracker_ctx.gnss_assistance_position_latitude );
+        fabs( gnss_scan_results->context.aiding_position_latitude - tracker_ctx.gnss_assistance_position_latitude );
     longitude_dif =
-        fabs( gnss_scan_results.context.aiding_position_longitude - tracker_ctx.gnss_assistance_position_longitude );
+        fabs( gnss_scan_results->context.aiding_position_longitude - tracker_ctx.gnss_assistance_position_longitude );
 
     /* Store the new assistance position only if the difference is greater than the conversion error */
     if( ( latitude_dif > ( float ) 0.03 ) || ( longitude_dif > ( float ) 0.03 ) )
     {
         HAL_DBG_TRACE_MSG( "New assistance position stored\n" );
 
-        tracker_ctx.gnss_assistance_position_latitude  = gnss_scan_results.context.aiding_position_latitude;
-        tracker_ctx.gnss_assistance_position_longitude = gnss_scan_results.context.aiding_position_longitude;
+        tracker_ctx.gnss_assistance_position_latitude  = gnss_scan_results->context.aiding_position_latitude;
+        tracker_ctx.gnss_assistance_position_longitude = gnss_scan_results->context.aiding_position_longitude;
 
         tracker_store_app_ctx( );
     }
@@ -430,14 +438,21 @@ static void tracker_app_init_context( uint8_t* dev_eui, uint8_t* join_eui, uint8
         tracker_init_app_ctx( dev_eui, join_eui, app_key, tracker_ctx.has_lr11xx_trx_firmware );
 
         /* Init the tracker internal log context */
-        tracker_init_internal_log_ctx( );
+        if( tracker_init_internal_log_ctx( ) != TRACKER_SUCCESS )
+        {
+            HAL_DBG_TRACE_ERROR( "tracker_init_internal_log_ctx failed\n" );
+        }
     }
     else
     {
         /* Restore the tracker internal log context */
         if( tracker_restore_internal_log_ctx( ) != TRACKER_SUCCESS )
         {
-            tracker_init_internal_log_ctx( );
+            /* Init the tracker internal log context */
+            if( tracker_init_internal_log_ctx( ) != TRACKER_SUCCESS )
+            {
+                HAL_DBG_TRACE_ERROR( "tracker_init_internal_log_ctx failed\n" );
+            }
         }
 
         /* Set the restored LoRaWAN Keys */
@@ -455,6 +470,12 @@ static void tracker_app_init_context( uint8_t* dev_eui, uint8_t* join_eui, uint8
     tracker_ctx.reset_board_asked          = false;
 
     smtc_board_select_gnss_antenna( tracker_ctx.gnss_antenna_sel );
+
+    /* Set the maximum authorized transmit output power supported by the board following the region */
+    tracker_app_set_max_tx_power_supported( tracker_ctx.lorawan_region, tracker_ctx.lorawan_sub_region );
+
+    /* Set the battery level */
+    smtc_board_set_battery_level( tracker_get_battery_level( ) );
 }
 
 static void tracker_app_modem_configure_lorawan_params( void )
@@ -527,11 +548,6 @@ static void tracker_app_modem_configure_lorawan_params( void )
     ASSERT_SMTC_MODEM_RC( smtc_modem_set_region( stack_id, tracker_ctx.lorawan_region ) );
     modem_region_to_string( tracker_ctx.lorawan_region );
 
-    if( tracker_ctx.lorawan_region == SMTC_MODEM_REGION_EU_868 )
-    {
-        ASSERT_SMTC_MODEM_RC( smtc_modem_set_tx_power_offset_db( stack_id, 0 ) );
-    }
-
     /* Configure modem DM status for regular almanac status update */
     smtc_modem_dm_info_interval_format_t format   = SMTC_MODEM_DM_INFO_INTERVAL_IN_DAY;
     uint8_t                              interval = 1;
@@ -560,27 +576,28 @@ the LBM will report SMTC_MODEM_RC_NO_TIME on smtc_modem_get_time() call. */
 static void tracker_app_build_and_send_tracker_settings( const uint8_t* buffer, uint8_t len )
 {
     uint8_t tx_max_payload = 0;
-    uint8_t payload_len    = 0;
-    uint8_t lorawan_payload[242];
 
     ASSERT_SMTC_MODEM_RC( smtc_modem_get_next_tx_max_payload( stack_id, &tx_max_payload ) );
     HAL_DBG_TRACE_PRINTF( "tx_max_payload %d \n", tx_max_payload );
 
-    /* Add tracker settings value */
-    lorawan_payload[payload_len++] = TLV_TRACKER_SETTINGS_TAG;  // Tracker settings TAG
-    lorawan_payload[payload_len++] = len;                       // Tracker settings LEN is variable
-
-    memcpy( lorawan_payload + 2, buffer, len );
-    payload_len += len;
-
     HAL_DBG_TRACE_PRINTF( " - Tracker settings (%d bytes) : ", len + 2 );
 
-    if( tx_max_payload < payload_len )
+    if( tx_max_payload < ( len + 2 ) )
     {
         HAL_DBG_TRACE_ERROR( "TX max payload < payload len\n" );
     }
     else
     {
+        uint8_t payload_len = 0;
+        uint8_t lorawan_payload[242];
+
+        /* Add tracker settings value */
+        lorawan_payload[payload_len++] = TLV_TRACKER_SETTINGS_TAG;  // Tracker settings TAG
+        lorawan_payload[payload_len++] = len;                       // Tracker settings LEN is variable
+
+        memcpy( lorawan_payload + payload_len, buffer, len );
+        payload_len += len;
+
         HAL_DBG_TRACE_MSG( "Send data\n" );
         smtc_modem_request_uplink( stack_id, TRACKER_REQUEST_MSG_PORT, false, lorawan_payload, payload_len );
     }
@@ -655,6 +672,9 @@ static void tracker_app_store_new_accumulated_charge( uint32_t charge_mAh )
         tracker_store_app_ctx( );
 
         previous_charge_mAh = charge_mAh;
+
+        /* Set the new battery level */
+        smtc_board_set_battery_level( tracker_get_battery_level( ) );
     }
 }
 
@@ -699,12 +719,17 @@ static void tracker_app_parse_downlink_frame( uint8_t port, const uint8_t* paylo
             case GET_APP_TRACKER_SETTINGS_CMD:
             {
                 uint8_t settings_buffer[240];
+                uint8_t tracker_settings_payload_max_len = 0;
                 memcpy( settings_buffer, payload + payload_index, len );
+
+                ASSERT_SMTC_MODEM_RC(
+                    smtc_modem_get_next_tx_max_payload( stack_id, &tracker_settings_payload_max_len ) );
 
                 HAL_DBG_TRACE_INFO( "###### ===== TRACKER CONFIGURATION SETTINGS PAYLOAD RECEIVED ==== ######\n\n" );
 
                 tracker_ctx.tracker_settings_payload_len =
-                    tracker_parse_cmd( stack_id, settings_buffer, tracker_ctx.tracker_settings_payload, false );
+                    tracker_parse_cmd( stack_id, settings_buffer, tracker_ctx.tracker_settings_payload,
+                                       tracker_settings_payload_max_len, false );
 
                 /* Store the new values here if it's asked */
                 if( ( tracker_ctx.new_value_to_set ) == true )
@@ -832,32 +857,66 @@ static void tracker_app_display_lbm_version( void )
 
 static void tracker_app_set_adr( void )
 {
-    uint8_t adr_custom_list_eu868[16] = { 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
-                                          0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03 }; /* 125kHz - SF9 */
-
-    uint8_t adr_custom_list_us915[16] = { 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                                          0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01 }; /* 125kHz - SF9 */
-    uint8_t custom_nb_trans           = 3;
+    /* SF9 = DR3 for EU868 / IN865 / RU864 / AU915 / CN470 /AS923 / KR920 */
+    uint8_t adr_custom_list_freq_SF9_DR3[16] = { 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+                                                 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03 }; /* 125kHz - SF9 */
+    /* SF9 = DR1 for US915 */
+    uint8_t adr_custom_list_SF9_DR1[16] = { 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                                            0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01 }; /* 125kHz - SF9 */
+    uint8_t custom_nb_trans             = 3;
 
     /* Set the ADR profile once joined */
     switch( tracker_ctx.lorawan_region )
     {
     case SMTC_MODEM_REGION_EU_868:
-        HAL_DBG_TRACE_INFO( "Set ADR profile for EU868\n" );
+    case SMTC_MODEM_REGION_IN_865:
+    case SMTC_MODEM_REGION_RU_864:
+    case SMTC_MODEM_REGION_AU_915:
+    case SMTC_MODEM_REGION_AS_923_GRP1:
+    case SMTC_MODEM_REGION_AS_923_GRP2:
+    case SMTC_MODEM_REGION_AS_923_GRP3:
+    case SMTC_MODEM_REGION_CN_470:
+    case SMTC_MODEM_REGION_CN_470_RP_1_0:
+    case SMTC_MODEM_REGION_KR_920:
         ASSERT_SMTC_MODEM_RC(
-            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_eu868 ) );
+            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_freq_SF9_DR3 ) );
         ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans ) );
         break;
     case SMTC_MODEM_REGION_US_915:
-        HAL_DBG_TRACE_INFO( "Set ADR profile for US915\n" );
         ASSERT_SMTC_MODEM_RC(
-            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_us915 ) );
+            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_SF9_DR1 ) );
         ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans ) );
         break;
     default:
         HAL_DBG_TRACE_ERROR( "Region not supported in this example, could not set custom ADR profile\n" );
         break;
     }
+}
+
+static void tracker_app_set_max_tx_power_supported( smtc_modem_region_t region, smtc_modem_sub_region_t sub_region )
+{
+    int8_t max_tx_power_supported = 22;
+
+    switch( region )
+    {
+    case SMTC_MODEM_REGION_IN_865:
+    case SMTC_MODEM_REGION_AU_915:
+        max_tx_power_supported = 14;
+        break;
+    case SMTC_MODEM_REGION_AS_923_GRP1:
+        if( sub_region == SMTC_MODEM_SUB_REGION_JAPAN )
+        {
+            max_tx_power_supported = 9;
+        }
+        break;
+    case SMTC_MODEM_REGION_KR_920:
+        max_tx_power_supported = 8;
+        break;
+    default:
+        break;
+    }
+
+    smtc_board_set_max_tx_power_supported( max_tx_power_supported );
 }
 
 /*
@@ -893,7 +952,7 @@ static void on_modem_reset( uint16_t reset_count )
 
         /* Check if the batteries are too low, if yes switch the tracker in airplane mode, \note if this test is
          * moved elsewhere in this app the TRACKER_BOARD_MAX_VOLTAGE_RECOVERY_TIME value should be evaluate again */
-        smtc_board_measure_battery_drop( stack_id, &voltage_drop, &voltage_recovery_time );
+        smtc_board_measure_battery_drop( stack_id, tracker_ctx.lorawan_region, &voltage_drop, &voltage_recovery_time );
         if( ( voltage_recovery_time > TRACKER_BOARD_MAX_VOLTAGE_RECOVERY_TIME ) &&
             ( tracker_ctx.accumulated_charge_mAh > ( TRACKER_BOARD_BATTERY_CAPACITY * 0.8 ) ) )
         {
@@ -1026,39 +1085,35 @@ static void on_middleware_gnss_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "GNSS middleware event - SCAN DONE\n" );
         gnss_mw_get_event_data_scan_done( &gnss_scan_results );
-        gnss_mw_display_results( gnss_scan_results );
+        gnss_mw_display_results( &gnss_scan_results );
 
         /* Convert GPS timestamp to UTC timestamp */
-        for( int i = 0; i < gnss_scan_results.nb_scan_valid; i++ )
+        for( int i = 0; i < gnss_scan_results.nb_scans_valid; i++ )
         {
-            gnss_scan_results.scan[i].timestamp =
-                apps_modem_common_convert_gps_to_utc_time( gnss_scan_results.scan[i].timestamp );
+            gnss_scan_results.scans[i].timestamp =
+                apps_modem_common_convert_gps_to_utc_time( gnss_scan_results.scans[i].timestamp );
         }
 
         /* Store the consumption */
         tracker_ctx.gnss_scan_charge_uAh += gnss_scan_results.power_consumption_uah;
 
         /* timestamp the beginning ot the sequence */
-        if( gnss_scan_results.nb_scan_valid > 0 )
+        if( gnss_scan_results.nb_scans_valid > 0 )
         {
-            tracker_ctx.start_sequence_timestamp = gnss_scan_results.scan[0].timestamp;
+            tracker_ctx.start_sequence_timestamp = gnss_scan_results.scans[0].timestamp;
         }
         else
         {
             tracker_ctx.start_sequence_timestamp = apps_modem_common_get_utc_time( );
         }
 
-        /* Has tracker moved ? */
-        tracker_ctx.accelerometer_move_history =
-            ( tracker_ctx.accelerometer_move_history << 1 ) + is_accelerometer_detected_moved( );
-
         /* Check if a new assistance position is available */
-        tracker_gnss_store_new_assistance_position( gnss_scan_results );
+        tracker_gnss_store_new_assistance_position( &gnss_scan_results );
 
         /* Log results in internal memory */
         if( tracker_ctx.internal_log_enable )
         {
-            tracker_store_gnss_in_internal_log( gnss_scan_results );
+            tracker_store_gnss_in_internal_log( &gnss_scan_results );
         }
     }
 
@@ -1068,7 +1123,7 @@ static void on_middleware_gnss_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "GNSS middleware event - TERMINATED\n" );
         gnss_mw_get_event_data_terminated( &tracker_ctx.gnss_nb_scan_sent );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.gnss_nb_scan_sent.nb_scan_sent );
+        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.gnss_nb_scan_sent.nb_scans_sent );
 
         ASSERT_SMTC_MODEM_RC( smtc_modem_get_duty_cycle_status( &duty_cycle_status_ms ) );
         HAL_DBG_TRACE_PRINTF( "Remaining duty cycle %d ms\n", duty_cycle_status_ms );
@@ -1089,11 +1144,19 @@ static void on_middleware_gnss_event( uint8_t pending_events )
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_NO_TIME ) )
     {
         HAL_DBG_TRACE_INFO( "GNSS middleware event - ERROR NO TIME\n" );
+        HAL_DBG_TRACE_MSG( "Trig a new sync request\n" );
+        ASSERT_SMTC_MODEM_RC( smtc_modem_time_trigger_sync_request( stack_id ) );
+
+        /* Force the nb_scan_sent value to 0 to launch Wi-Fi scan */
+        tracker_ctx.gnss_nb_scan_sent.nb_scans_sent = 0;
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE ) )
     {
         HAL_DBG_TRACE_INFO( "GNSS middleware event - ALMANAC UPDATE REQUIRED\n" );
+
+        uint8_t dm_almanac_status = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
+        ASSERT_SMTC_MODEM_RC( smtc_modem_dm_request_single_uplink( &dm_almanac_status, 1 ) );
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_NO_AIDING_POSITION ) )
@@ -1114,7 +1177,11 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_NO_AIDING_POSITION ) ||
         gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_UNKNOWN ) )
     {
-        if( ( tracker_ctx.gnss_nb_scan_sent.nb_scan_sent == 0 ) ||
+        /* Has tracker moved ? */
+        tracker_ctx.accelerometer_move_history =
+            ( tracker_ctx.accelerometer_move_history << 1 ) + is_accelerometer_detected_moved( );
+
+        if( ( tracker_ctx.gnss_nb_scan_sent.nb_scans_sent == 0 ) ||
             ( tracker_ctx.scan_priority == TRACKER_NO_PRIORITY ) )
         {
             HAL_DBG_TRACE_MSG( "Start Wi-Fi scan\n" );
@@ -1167,7 +1234,7 @@ static void on_middleware_wifi_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "Wi-Fi middleware event - SCAN DONE\n" );
         wifi_mw_get_event_data_scan_done( &wifi_scan_results );
-        wifi_mw_display_results( wifi_scan_results );
+        wifi_mw_display_results( &wifi_scan_results );
 
         /* Convert GPS timestamp to UTC timestamp */
         wifi_scan_results.timestamp = apps_modem_common_convert_gps_to_utc_time( wifi_scan_results.timestamp );
@@ -1177,7 +1244,7 @@ static void on_middleware_wifi_event( uint8_t pending_events )
 
         if( tracker_ctx.internal_log_enable )
         {
-            tracker_store_wifi_in_internal_log( wifi_scan_results );
+            tracker_store_wifi_in_internal_log( &wifi_scan_results );
         }
     }
 
@@ -1187,7 +1254,7 @@ static void on_middleware_wifi_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "Wi-Fi middleware event - TERMINATED\n" );
         wifi_mw_get_event_data_terminated( &tracker_ctx.wifi_nb_scan_sent );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.wifi_nb_scan_sent.nb_scan_sent );
+        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.wifi_nb_scan_sent.nb_scans_sent );
 
         ASSERT_SMTC_MODEM_RC( smtc_modem_get_duty_cycle_status( &duty_cycle_status_ms ) );
         HAL_DBG_TRACE_PRINTF( "Remaining duty cycle %d ms\n", duty_cycle_status_ms );
@@ -1211,7 +1278,7 @@ static void on_middleware_wifi_event( uint8_t pending_events )
     {
         uint32_t sequence_duration_sec = apps_modem_common_get_utc_time( ) - tracker_ctx.start_sequence_timestamp;
 
-        if( ( tracker_ctx.wifi_nb_scan_sent.nb_scan_sent == 0 ) ||
+        if( ( tracker_ctx.wifi_nb_scan_sent.nb_scans_sent == 0 ) ||
             ( tracker_app_is_tracker_in_static_mode( ) == true ) )
         {
             HAL_DBG_TRACE_MSG( "No scan results good enough or keep alive frame, sensors values\n" );

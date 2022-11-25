@@ -67,7 +67,7 @@
  * --- PRIVATE TYPES -----------------------------------------------------------
  */
 
-wifi_settings_t settings;
+static wifi_settings_t settings = { 0 };
 
 /*
  * -----------------------------------------------------------------------------
@@ -84,35 +84,30 @@ wifi_settings_t settings;
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
 
-void smtc_wifi_settings_init( wifi_settings_t wifi_settings )
+void smtc_wifi_settings_init( const wifi_settings_t* wifi_settings )
 {
-    settings.channels            = wifi_settings.channels;
-    settings.types               = wifi_settings.types;
-    settings.max_results         = wifi_settings.max_results;
-    settings.timeout_per_channel = wifi_settings.timeout_per_channel;
-    settings.timeout_per_scan    = wifi_settings.timeout_per_scan;
+    /* Set current context Wi-Fi settings */
+    memcpy( &settings, wifi_settings, sizeof settings );
 }
 
-bool smtc_wifi_start_scan( const void* ral_context )
+bool smtc_wifi_start_scan( const void* radio_context )
 {
-    bool status = false;
+    lr11xx_status_t status;
 
     MW_DBG_TRACE_INFO( "start Wi-Fi scan\n" );
 
-    status = lr11xx_configure_for_scan( ral_context );
-
-    if( status == true )
+    if( mw_radio_configure_for_scan( radio_context ) == true )
     {
         status =
-            lr11xx_system_set_dio_irq_params( ral_context, LR11XX_SYSTEM_IRQ_WIFI_SCAN_DONE, LR11XX_SYSTEM_IRQ_NONE );
-        if( status != false )
+            lr11xx_system_set_dio_irq_params( radio_context, LR11XX_SYSTEM_IRQ_WIFI_SCAN_DONE, LR11XX_SYSTEM_IRQ_NONE );
+        if( status != LR11XX_STATUS_OK )
         {
             MW_DBG_TRACE_ERROR( "Failed to set Wi-Fi IRQ params\n" );
             return false;
         }
 
-        status = lr11xx_wifi_cfg_timestamp_ap_phone( ral_context, TIMESTAMP_AP_PHONE_FILTERING );
-        if( status != false )
+        status = lr11xx_wifi_cfg_timestamp_ap_phone( radio_context, TIMESTAMP_AP_PHONE_FILTERING );
+        if( status != LR11XX_STATUS_OK )
         {
             MW_DBG_TRACE_ERROR( "Failed to configure timestamp ap phone\n" );
             return false;
@@ -121,10 +116,10 @@ bool smtc_wifi_start_scan( const void* ral_context )
         /* Enable Wi-Fi path */
         mw_bsp_wifi_prescan_actions( );
 
-        status = lr11xx_wifi_scan_time_limit( ral_context, settings.types, settings.channels,
+        status = lr11xx_wifi_scan_time_limit( radio_context, settings.types, settings.channels,
                                               LR11XX_WIFI_SCAN_MODE_BEACON_AND_PKT, settings.max_results,
                                               settings.timeout_per_channel, settings.timeout_per_scan );
-        if( status != false )
+        if( status != LR11XX_STATUS_OK )
         {
             MW_DBG_TRACE_ERROR( "Failed to start Wi-Fi scan\n" );
             mw_bsp_wifi_postscan_actions( );
@@ -146,25 +141,34 @@ void smtc_wifi_scan_ended( void )
     mw_bsp_wifi_postscan_actions( );
 }
 
-void smtc_wifi_get_results( const void* ral_context, wifi_scan_all_result_t* wifi_results )
+bool smtc_wifi_get_results( const void* radio_context, wifi_scan_all_result_t* wifi_results )
 {
     lr11xx_wifi_basic_complete_result_t wifi_results_mac_addr[WIFI_MAX_RESULTS] = { 0 };
     uint8_t                             nb_results;
+    uint8_t                             max_nb_results;
     uint8_t                             result_index = 0;
     lr11xx_status_t                     status       = LR11XX_STATUS_OK;
 
-    status = lr11xx_wifi_get_nb_results( ral_context, &nb_results );
+    status = lr11xx_wifi_get_nb_results( radio_context, &nb_results );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to get Wi-Fi scan number of results\n" );
-        return;
+        return false;
     }
 
-    status = lr11xx_wifi_read_basic_complete_results( ral_context, 0, nb_results, wifi_results_mac_addr );
+    /* check if the array is big enough to hold all results */
+    max_nb_results = sizeof( wifi_results_mac_addr ) / sizeof( wifi_results_mac_addr[0] );
+    if( nb_results > max_nb_results )
+    {
+        MW_DBG_TRACE_ERROR( "Wi-Fi scan result size exceeds %u (%u)\n", max_nb_results, nb_results );
+        return false;
+    }
+
+    status = lr11xx_wifi_read_basic_complete_results( radio_context, 0, nb_results, wifi_results_mac_addr );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to read Wi-Fi scan results\n" );
-        return;
+        return false;
     }
 
     /* add scan to results */
@@ -193,28 +197,30 @@ void smtc_wifi_get_results( const void* ral_context, wifi_scan_all_result_t* wif
             result_index++;
         }
     }
+
+    return true;
 }
 
-bool smtc_wifi_get_power_consumption( const void* ral_context, uint32_t* power_consumption_uah )
+bool smtc_wifi_get_power_consumption( const void* radio_context, uint32_t* power_consumption_uah )
 {
     lr11xx_status_t                  status;
     lr11xx_wifi_cumulative_timings_t timing;
     lr11xx_system_reg_mode_t         reg_mode;
 
-    status = lr11xx_wifi_read_cumulative_timing( ral_context, &timing );
+    status = lr11xx_wifi_read_cumulative_timing( radio_context, &timing );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to get wifi timings\n" );
         return false;
     }
 
-    mw_bsp_get_lr11xx_reg_mode( ral_context, &reg_mode );
+    mw_bsp_get_lr11xx_reg_mode( radio_context, &reg_mode );
     *power_consumption_uah = ( uint32_t ) lr11xx_wifi_get_consumption( reg_mode, timing );
 
     /* Accumulate timings until there is a significant amount of energy consumed */
     if( *power_consumption_uah > 0 )
     {
-        status = lr11xx_wifi_reset_cumulative_timing( ral_context );
+        status = lr11xx_wifi_reset_cumulative_timing( radio_context );
         if( status != LR11XX_STATUS_OK )
         {
             MW_DBG_TRACE_ERROR( "Failed to reset wifi timings\n" );

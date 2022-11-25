@@ -48,6 +48,8 @@ extern "C" {
 #include <stdbool.h>
 
 #include "gnss_helpers.h"
+#include "gnss_helpers_defs.h"
+#include "gnss_queue_defs.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -70,11 +72,6 @@ extern "C" {
 #define GNSS_RESULT_SIZE_MAX_MODE3 ( 49 + 1 ) /* 1 byte for destination byte */
 
 /**
- * @brief Maximum number of GNSS scan in a scan group [1..32]
- */
-#define GNSS_SCAN_GROUP_SIZE_MAX 4
-
-/**
  * @brief The minimum number of SV necessary for single NAV position solving
  */
 #define GNSS_SCAN_SINGLE_NAV_MIN_SV 6
@@ -92,7 +89,7 @@ typedef enum
                                        //!< as the group size. This modes also aborts a scan group as soon as a not
                                        //!< valid scan happen, in order to save power consumption.
     GNSS_SCAN_GROUP_MODE_SENSITIVITY,  //!< This mode maximizes the scan success rate. A scan group is considered valid
-                                       //!< as soon as there is a successfull scan, no constraint on nb SV, except if 1
+                                       //!< as soon as there is a successful scan, no constraint on nb SV, except if 1
                                        //!< NAV only where the NAV is analyzed.
 } gnss_scan_group_mode_t;
 
@@ -102,10 +99,10 @@ typedef enum
 typedef struct
 {
     uint32_t                         timestamp;     //!< GPS time at which the scan has completed
-    uint8_t                          detected_sv;   //!< The number of Space Vehicules detected during the scan
-    uint8_t                          results_size;  //!< The size of the result (NAV)
+    uint8_t                          detected_svs;  //!< Number of Space Vehicles detected during the scan
+    uint8_t                          results_size;  //!< Size of the result (NAV)
     uint8_t                          results_buffer[GNSS_SCAN_METADATA_SIZE + GNSS_RESULT_SIZE_MAX_MODE3];
-    lr11xx_gnss_detected_satellite_t info_sv[GNSS_MAX_NB_SAT];  //!< Information about each SV detected (ID, CNR...)
+    lr11xx_gnss_detected_satellite_t info_svs[GNSS_NB_SVS_MAX];  //!< Information about each SV detected (ID, CNR...)
     bool nav_valid;  //!< Indicates if a single NAV can be used by the solver to get a position */
 } gnss_scan_t;
 
@@ -114,15 +111,15 @@ typedef struct
  */
 typedef struct
 {
-    uint8_t                token;                           //!< Scan group identifier (7-bits roll-over)
-    gnss_scan_t            scan[GNSS_SCAN_GROUP_SIZE_MAX];  //!< Description of all scans of the group
-    uint8_t                scan_group_size;                 //!< Size of the scan group
-    gnss_scan_group_mode_t mode;                            //!< The scan group mode (default, sensitivity...)
-    uint8_t                nb_sv_threshold;  //!< The minimum number of SV to be detected for a scan to be valid
-    uint8_t                nb_scan_valid;    //!< The number of valid scan in the group
-    uint8_t                nb_scan_total;
-    uint8_t                nb_scan_sent;           //!< The number scan sent over the air
-    uint32_t               power_consumption_uah;  //!< The power consumption of the complete scan group
+    uint8_t                token;                            //!< Scan group identifier (7-bits roll-over)
+    gnss_scan_t            scans[GNSS_SCAN_GROUP_SIZE_MAX];  //!< Description of all scans of the group
+    uint8_t                scan_group_size;                  //!< Size of the scan group
+    gnss_scan_group_mode_t mode;                             //!< The scan group mode (default, sensitivity...)
+    uint8_t                nb_svs_threshold;       //!< Minimum number of SVs to be detected for a scan to be valid
+    uint8_t                nb_scans_valid;         //!< Number of valid scans in the group
+    uint8_t                nb_scans_total;         //!< Total number of scans completed (valid or not)
+    uint8_t                nb_scans_sent;          //!< Number of scans sent over the air
+    uint32_t               power_consumption_uah;  //!< Power consumption of the complete scan group
     bool                   abort;                  //!< Flag to indicate if there is a request to abort the scan group
 } gnss_scan_group_queue_t;
 
@@ -132,31 +129,32 @@ typedef struct
  */
 
 /*!
- * @brief Reset the scan group token to 0
+ * @brief Reset the scan group token
  *
- * @param[in] queue The queue for which the token needs to be reset
+ * @param[in] queue Queue for which the token needs to be reset
  */
 void gnss_scan_group_queue_reset_token( gnss_scan_group_queue_t* queue );
 
 /*!
  * @brief Increment the scan group token value (7-bits roll-over)
  *
- * @param[in] queue The queue for which the token needs to be incremented
+ * @param[in] queue Queue for which the token needs to be incremented
  */
 void gnss_scan_group_queue_increment_token( gnss_scan_group_queue_t* queue );
 
 /*!
  * @brief Reset the scan group queue, except token value
  *
- * @param[in] queue The queue to be initialized and configured
- * @param[in] scan_group_size The scan group size to be used
- * @param[in] mode The scan group mode to be used (HIGH_SENSITIVITY or HIGH_ACCURACY)
- * @param[in] nb_sv_threshold The minimum number of SV to be detected for a valid scan (for HIGH_ACCURACY mode only)
+ * @param[in] queue Queue to be initialized and configured
+ * @param[in] scan_group_size Size of the scan group
+ * @param[in] mode Scan group mode to be used
+ * @param[in] nb_svs_threshold Minimum number of space vehicles to be detected for a valid scan (for
+ * GNSS_SCAN_GROUP_MODE_DEFAULT mode only)
  *
- * @retval a boolean set to true if the queue could be configured, false otherwise
+ * @return a boolean set to true if the queue could be configured, false otherwise
  */
 bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_group_size, gnss_scan_group_mode_t mode,
-                                uint8_t nb_sv_threshold );
+                                uint8_t nb_svs_threshold );
 
 /*!
  * @brief Check if a queue is full
@@ -165,9 +163,9 @@ bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_gro
  *   - The number of valid GNSS scan result has reached GNSS_SCAN_GROUP_SIZE; or
  *   - The scan group has been aborted due to invalid scan
  *
- * @param[in] queue The queue to check
+ * @param[in] queue Queue to check
  *
- * @retval a boolean set to true if the queue is full, false otherwise
+ * @return a boolean set to true if the queue is full, false otherwise
  */
 bool gnss_scan_group_queue_is_full( gnss_scan_group_queue_t* queue );
 
@@ -183,39 +181,34 @@ bool gnss_scan_group_queue_is_full( gnss_scan_group_queue_t* queue );
  * valid scan      : a successful scan which detected at least 1 SV
  * valid NAV       : a NAV message that can be used by the solver to get a position with this single NAV
  *
- * @param[in] queue The queue to check
+ * @param[in] queue Queue to check
  *
- * @retval a boolean set to true if the queue is valid, false otherwise
+ * @return a boolean set to true if the queue is valid, false otherwise
  */
 bool gnss_scan_group_queue_is_valid( gnss_scan_group_queue_t* queue );
 
 /*!
  * @brief Add a new scan result to a queue
+ * After a call to this function, the user must check if the queue is full with gnss_scan_group_queue_is_full()
+ * to avoid overflow.
  *
- * @param[in] queue The queue to update
- * @param[in] scan The scan result to push to the queue
+ * @param[in] queue Queue to update
+ * @param[in] scan Scan result to push to the queue
  */
 void gnss_scan_group_queue_push( gnss_scan_group_queue_t* queue, gnss_scan_t* scan );
 
 /*!
  * @brief Prepare the scan result payload to be sent over the air, with associated metadata.
- * After this function call, nb_scan_sent is increased by 1 (considered sent).
- * The format of the payload is: | last NAV (1b) | token (7b) | NAV |
+ * After this function call, nb_scans_sent is increased by 1 (considered sent)
+ * The format of the payload is: | last NAV (1bit) | token (7bits) | NAV |
  *
- * @param[in] queue The queue from which the result is popped.
- * @param[out] buffer A pointer to the prepared buffer ready to be sent over the air
- * @param[out] buffer_size The size of the buffer to be sent
+ * @param[in] queue Queue from which the result is popped
+ * @param[out] buffer Pointer to the prepared buffer ready to be sent over the air
+ * @param[out] buffer_size Size of the buffer to be sent
  *
- * @retval a boolean set to true is a scan result is ready to be sent, false if there is no result to be sent.
+ * @return a boolean set to true is a scan result is ready to be sent, false if there is no result to be sent
  */
 bool gnss_scan_group_queue_pop( gnss_scan_group_queue_t* queue, uint8_t** buffer, uint8_t* buffer_size );
-
-/*!
- * @brief Helper function that prints a queue
- *
- * @param[in] queue The queue to be printed.
- */
-void gnss_scan_group_queue_print( gnss_scan_group_queue_t* queue );
 
 #ifdef __cplusplus
 }

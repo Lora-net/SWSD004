@@ -171,29 +171,23 @@ static uint16_t adc_read( uint32_t channel, uint32_t sampling_time )
     adc_channel_conf.SamplingTime = sampling_time;
     adc_channel_conf.Rank         = ADC_REGULAR_RANK_1;
 
-    if( HAL_ADC_ConfigChannel( &hal_adc_handle, &adc_channel_conf ) != HAL_OK )
+    if( HAL_ADC_ConfigChannel( &hal_adc_handle, &adc_channel_conf ) == HAL_OK )
     {
-        return 0;
-    }
+        if( HAL_ADC_Start( &hal_adc_handle ) == HAL_OK )
+        {
+            if( HAL_ADC_PollForConversion( &hal_adc_handle, 10 ) == HAL_OK )
+            {
+                if( ( HAL_ADC_GetState( &hal_adc_handle ) & HAL_ADC_STATE_REG_EOC ) == HAL_ADC_STATE_REG_EOC )
+                {
+                    adc_value = HAL_ADC_GetValue( &hal_adc_handle );
 
-    if( HAL_ADC_Start( &hal_adc_handle ) != HAL_OK )
-    {
-        return 0;
-    }
-
-    if( HAL_ADC_PollForConversion( &hal_adc_handle, 10 ) != HAL_OK )
-    {
-        return 0;
-    }
-
-    if( ( HAL_ADC_GetState( &hal_adc_handle ) & HAL_ADC_STATE_REG_EOC ) == HAL_ADC_STATE_REG_EOC )
-    {
-        adc_value = HAL_ADC_GetValue( &hal_adc_handle );
-    }
-
-    if( HAL_ADC_Stop( &hal_adc_handle ) != HAL_OK )
-    {
-        return 0;
+                    if( HAL_ADC_Stop( &hal_adc_handle ) != HAL_OK )
+                    {
+                        adc_value = 0;
+                    }
+                }
+            }
+        }
     }
 
     return adc_value;

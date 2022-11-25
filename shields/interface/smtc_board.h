@@ -173,6 +173,32 @@ bool smtc_board_get_usr_button( void );
  */
 int smtc_board_get_tx_power_offset( void );
 
+/*!
+ * @brief Set the battery level.
+ *
+ * @param [in] battery_level_percentage battery level in percentage
+ */
+void smtc_board_set_battery_level( uint8_t battery_level_percentage );
+
+/*!
+ * @brief Return the battery level.
+ *
+ * @returns battery level in percentage
+ */
+uint8_t smtc_board_get_battery_level( void );
+
+/**
+ * @brief Set the maximum TX output supported by the board 
+ *
+ * @param [in] max_tx_power Max transmit power.
+ */
+void smtc_board_set_max_tx_power_supported( int8_t max_tx_power );
+
+/**
+ * @brief Get the maximum TX output power supported by the board
+ */
+int8_t smtc_board_get_max_tx_power_supported( void );
+
 #ifdef __cplusplus
 }
 #endif

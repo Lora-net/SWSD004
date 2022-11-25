@@ -1,4 +1,4 @@
-# LoRa Basics Modem Geolocation SDK
+# LoRa Basics Modem Geolocation SDK - SWSD004
 
 The LoRa Basics Modem Geolocation SDK contains several examples to demonstrate the usage of LoRa Basic Modem features with geolocation operations.
 
@@ -13,6 +13,7 @@ This project contains a demonstration for a full-feature tracker application, as
 | Geolocation - Wi-Fi        | Perform Wi-Fi scans and send results over LoRaWAN using Wi-Fi middleware                 | [README](apps/examples/geolocation_wifi/README.md)      |
 | Geolocation - GNSS & Wi-Fi | Perform GNSS and Wi-Fi scans and send results over LoRaWAN using geolocation middlewares | [README](apps/examples/geolocation_gnss_wifi/README.md) |
 | Full almanac update        | Perform a full almanac update                                                            | [README](apps/examples/full_almanac_update/README.md)   |
+| TX/RX continuous           | Generate a TX/RX continuous thanks to the test mode                                      | [README](apps/examples/tx_rx_continuous/README.md)      |
 
 
 ## Configuration
@@ -26,29 +27,38 @@ There is also [a common configuration file](apps/common/lorawan_key_config.h) wh
 * AppKey
 * Region
 
+## Convert LoRa Basics Modem Edge application code in LoRa Basics Modem application code
+
+In order to help a LoRa Basics Modem Edge application code convertion to a LoRa Basics Modem application code please refer to [ModemE_to_LBM](doc/ModemE_to_LBM.md) 
+
 ## Requirements
 
 ### Supported platforms
 
 LoRa Basics Modem is platform independent and can be used with any MCU that fulfills the requirements.
 
-This SDK is developed on the following hardware:
+This SDK is developed on the STMicroeletronics [NUCLEO-L476RG development board](https://www.st.com/en/evaluation-tools/nucleo-l476rg.html).
 
-* STMicroeletronics [NUCLEO-L476RG development board](https://www.st.com/en/evaluation-tools/nucleo-l476rg.html)
-* Semtech [LR1110MB1LBKS](https://fr.semtech.com/products/wireless-rf/lora-edge/lr1110mb1lbks) shield and [LR1110MB1LCKS](https://fr.semtech.com/products/wireless-rf/lora-edge/lr1110mb1lcks) shield
+Different Semtech shields can configured at compile time:
+
+* LR1110 / LR1120 see [README](shields/LR11XX/smtc_shield_lr11xx/README.md)
 * Semtech [LR1110TRK1BKS](https://fr.semtech.com/products/wireless-rf/lora-edge/lr1110trk1bks) board and [LR1110TRK1CKS](https://fr.semtech.com/products/wireless-rf/lora-edge/lr1110trk1cks) board
 
 ### Toolchain
 
-Examples can be compiled with either [Keil MDK ARM](https://www2.keil.com/mdk5) or [GNU Arm Embedded toolchain](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm).
+* [Keil MDK ARM](https://www2.keil.com/mdk5)
+* [GNU Arm Embedded toolchain](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm)
 
 The projects are known to compile with GCC arm-none-eabi toolchain v10.3.1.
 
 ### Firmware
 
-The LoRa Basics Modem library requires the LR11XX runs the transceiver firmware version 0x0307 ([available here](https://github.com/Lora-net/radio_firmware_images/tree/master/lr1110/transceiver)).
+The LoRa Basics Modem library requires the following firmware:
 
-To update the transceiver with the desired firmware version, please use [the updater tool application](https://github.com/Lora-net/lr1110_updater_tool/).
+* LR1110 firmware version 0x0307 ([available here](https://github.com/Lora-net/radio_firmware_images/tree/master/lr1110/transceiver))
+* LR1120 firmware version 0x0101 ([available here](https://github.com/Lora-net/radio_firmware_images/tree/master/lr1120/transceiver))
+
+To update the transceiver with the desired firmware version, please use [the updater tool application](https://github.com/Lora-net/SWTL001).
 
 ## Getting started
 
@@ -109,21 +119,16 @@ $ cd $SDK_FOLDER/apps/examples/geolocation_gnss/makefile
 $ make CRYPTO=SOFT -j
 ```
 
-The default value for all examples is set to `LR1110`.
+The default value for all examples is set to `LR11XX`.
 
 It is possible to select the platform mode with the MCU_BOARD & RADIO_BOARD variable:
 
-| MCU_BOARD value |
-| --------------- |
-| NUCLEO_L476RG   |
-| LR1110TRK1XKS   |
+It is possible to choose the shield with the `RADIO_BOARD` variable. The possible values are listed in the correspondind `README` file:
 
-| RADIO_BOARD value |
-| ----------------- |
-| LR1110MB1LXKS     |
-| LR1110TRK1XKS     |
+* [LR11xx shields](shields/LR11XX/smtc_shield_lr11xx/README.md)
 
-by default for examples in `apps` folder the MCU_BOARD is NUCLEO_L476RG and the RADIO_BOARD is LR1110MB1LXKS
+
+by default for examples in `apps` folder the MCU_BOARD is NUCLEO_L476RG and the RADIO_BOARD is LR1110MB1DIS
 by default for tracker application in `demonstrations/tracker_application` folder the MCU_BOARD is LR1110TRK1XKS and the RADIO_BOARD is LR1110TRK1XKS
 
 For instance, to build the project `geolocation_gnss` on the LR1110TRK1XKS platform board
@@ -139,13 +144,30 @@ $ make RADIO_BOARD=LR1110TRK1XKS MCU_BOARD=LR1110TRK1XKS -j
 
 Compatibility matrix :
 
-| Application                | NUCLEO_L476RG + LR1110MB1LXKS | LR1110TRK1XKS      |
-| -------------------------- | ----------------------------- | ------------------ |
-| Tracker application        | :x:                           | :heavy_check_mark: |
-| Geolocation - GNSS         | :heavy_check_mark:            | :heavy_check_mark: |
-| Geolocation - Wi-Fi        | :heavy_check_mark:            | :heavy_check_mark: |
-| Geolocation - GNSS & Wi-Fi | :heavy_check_mark:            | :heavy_check_mark: |
-| Full almanac update        | :heavy_check_mark:            | :heavy_check_mark: |
+| Application                | NUCLEO_L476RG + LR11XX shields | LR1110TRK1XKS      |
+| -------------------------- | ------------------------------ | ------------------ |
+| Tracker application        | :x:                            | :heavy_check_mark: |
+| Geolocation - GNSS         | :heavy_check_mark:             | :heavy_check_mark: |
+| Geolocation - Wi-Fi        | :heavy_check_mark:             | :heavy_check_mark: |
+| Geolocation - GNSS & Wi-Fi | :heavy_check_mark:             | :heavy_check_mark: |
+| Full almanac update        | :heavy_check_mark:             | :heavy_check_mark: |
+
+For instance, to build the project `Geolocation - GNSS` on the LR1120MB1DJS platform board with the software cryptographic mode, call the following commands:
+
+```shell
+$ cd $SDK_FOLDER/apps/examples/geolocation_gnss/makefile
+$ make RADIO_BOARD=LR1120MB1DJS CRYPTO=SOFT
+```
+
+##### Note on re-build
+
+When re-building an example after changing a compile-time parameter that affects LoRa Basics Modem library (like *CRYPTO*, *RADIO_BOARD* or *MIDDLEWARE*), it is important to force re-build of the LoRa Basics Modem library.
+
+This can be achieved by cleaning prior the re-build of the example with:
+
+```shell
+$ make clean_lbm
+```
 
 ##### Command line configuration
 

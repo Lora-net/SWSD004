@@ -146,6 +146,11 @@ extern "C" {
 #define GET_LORAWAN_NB_UPLINK_SINCE_LAST_DOWNLINK_CMD 0x50
 #define GET_LORAWAN_NB_UPLINK_SINCE_LAST_DOWNLINK_LEN 0x00
 #define GET_LORAWAN_NB_UPLINK_SINCE_LAST_DOWNLINK_ANSWER_LEN 0x02
+#define SET_LORAWAN_SUB_REGION_CMD 0x56
+#define SET_LORAWAN_SUB_REGION_LEN 0x01
+#define GET_LORAWAN_SUB_REGION_CMD 0x57
+#define GET_LORAWAN_SUB_REGION_LEN 0x00
+#define GET_LORAWAN_SUB_REGION_ANSWER_LEN 0x01
 
 /* GNSS */
 #define SET_GNSS_CONSTELLATION_CMD 0x0A
@@ -262,6 +267,12 @@ typedef enum
     TRACKER_NO_PRIORITY   = 0x02,  //!< Means no priority, GNSS and Wi-Fi are performed
 } tracker_scan_priority_t;
 
+typedef enum smtc_modem_sub_region_e
+{
+    SMTC_MODEM_NO_SUB_REGION    = 0x00,
+    SMTC_MODEM_SUB_REGION_JAPAN = 0x01,  //!< JAPAN is part of the AS-923 group 1 region
+} smtc_modem_sub_region_t;
+
 /*!
  * @brief Demo app context structure
  */
@@ -278,14 +289,15 @@ typedef struct
     bool     reset_board_asked;
 
     /* LoRaWAN Parameters */
-    uint8_t             dev_eui[8];
-    uint8_t             join_eui[8];
-    uint8_t             app_key[16];
-    uint8_t             chip_eui[8];
-    uint8_t             lorawan_pin[4];
-    bool                lorawan_parameters_have_changed;
-    smtc_modem_region_t lorawan_region;
-    bool                use_semtech_join_server;
+    uint8_t                 dev_eui[8];
+    uint8_t                 join_eui[8];
+    uint8_t                 app_key[16];
+    uint8_t                 chip_eui[8];
+    uint8_t                 lorawan_pin[4];
+    bool                    lorawan_parameters_have_changed;
+    smtc_modem_region_t     lorawan_region;
+    smtc_modem_sub_region_t lorawan_sub_region;
+    bool                    use_semtech_join_server;
 
     /* LR11XX & Modem version information */
     lr11xx_system_version_t      lr11xx_fw_version;
@@ -365,14 +377,14 @@ tracker_return_status_t tracker_restore_internal_log_ctx( void );
  *
  * @param [in] wifi_scan_results Wi-Fi scan results \ref wifi_mw_event_data_scan_done_t
  */
-void tracker_store_wifi_in_internal_log( wifi_mw_event_data_scan_done_t wifi_scan_results );
+void tracker_store_wifi_in_internal_log( wifi_mw_event_data_scan_done_t* wifi_scan_results );
 
 /*!
  * @brief Store the GNSS results in internal log flash memory
  *
  * @param [in] gnss_scan_results GNSS scan results \ref gnss_mw_event_data_scan_done_t
  */
-void tracker_store_gnss_in_internal_log( gnss_mw_event_data_scan_done_t gnss_scan_results );
+void tracker_store_gnss_in_internal_log( const gnss_mw_event_data_scan_done_t* gnss_scan_results );
 
 /*!
  * @brief Store the demo app context in the flash memory in the dedicated memory zone
@@ -387,7 +399,8 @@ void tracker_store_app_ctx( void );
  * @param [in] app_key LoRaWAN Application Key
  * @param [in] store_in_flash store the context in flash
  */
-void tracker_init_app_ctx( uint8_t* dev_eui, uint8_t* join_eui, uint8_t* app_key, bool store_in_flash );
+void tracker_init_app_ctx( const uint8_t* dev_eui, const uint8_t* join_eui, const uint8_t* app_key,
+                           const bool store_in_flash );
 
 /*!
  * @brief Restore the demo app context from the flash memory and set in /ref tracker_ctx_t structure
@@ -411,12 +424,56 @@ void tracker_reset_internal_log( void );
  *
  * @param [in] stack_id The stack identifier
  * @param [in] payload payload to parse
- * @param [in] buffer_out answer output buffer
+ * @param [out] buffer_out answer output buffer
+ * @param [in] buffer_out_len len of the output buffer
  * @param [in] all_command_enable activate or no all the commands
  *
  * @returns size of buffer_out
  */
-uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_out, bool all_commands_enable );
+uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_out, const uint8_t buffer_out_len,
+                           bool all_commands_enable );
+
+/*!
+ * @brief Return the battery level based on the Modem charge.
+ *
+ * @returns battery level in percentage
+ */
+uint8_t tracker_get_battery_level( void );
+
+/*!
+ * @brief Return the computed CRC
+ *
+ * @param [in] initial_value initial value of the CRC
+ * @param [in] buffer Buffer containing data used to compute the CRC
+ * @param [in] length Length of buffer
+ *
+ * @returns CRC value
+ */
+inline static uint8_t tracker_ctx_compute_crc( const uint8_t initial_value, const uint8_t* buffer, uint16_t length )
+{
+    uint8_t crc = initial_value;
+
+    for( uint16_t i = 0; i < length; i++ )
+    {
+        uint8_t extract = buffer[i];
+        uint8_t sum;
+
+        for( uint8_t j = 8; j > 0; j-- )
+        {
+            sum = ( crc ^ extract ) & 0x01;
+            crc >>= 1;
+
+            if( sum != 0 )
+            {
+                crc ^= 0x65;
+            }
+
+            extract >>= 1;
+        }
+    }
+
+    return crc;
+}
 
 #ifdef __cplusplus
 }

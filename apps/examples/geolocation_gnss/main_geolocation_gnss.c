@@ -72,7 +72,10 @@
 /**
  * @brief LR11XX radio firmware
  */
-#define LR11XX_FW_VERSION 0x0307
+#define LR1110_FW_VERSION 0x0307
+#define LR1110_FW_TYPE 0x01
+#define LR1120_FW_VERSION 0x0101
+#define LR1120_FW_TYPE 0x02
 
 /**
  * @brief LoRaWAN port used for downlinks from the DAS/solver
@@ -129,22 +132,22 @@ static ralf_t* modem_radio;
 static bool is_first_time_sync = true;
 
 /*!
- * @brief ADR custom list and retransmission definition for EU868 region
+ * @brief ADR custom list and retransmission definition for EU868 / IN865 / RU864 / AU915 / CN470 /AS923 / KR920 regions
  */
-static const uint8_t adr_custom_list_eu868[16] = ADR_CUSTOM_LIST_EU868;
-static const uint8_t custom_nb_trans_eu868     = CUSTOM_NB_TRANS_EU868;
-
-/*!
- * @brief ADR custom list and retransmission definition for CN470 region
- */
-static const uint8_t adr_custom_list_cn470[16] = ADR_CUSTOM_LIST_CN470;
-static const uint8_t custom_nb_trans_cn470     = CUSTOM_NB_TRANS_CN470;
+static const uint8_t adr_custom_list_dr5_dr3[16] = ADR_CUSTOM_LIST_DR5_DR3;
+static const uint8_t custom_nb_trans_dr5_dr3     = CUSTOM_NB_TRANS_DR5_DR3;
 
 /*!
  * @brief ADR custom list and retransmission definition for US915 region
  */
 static const uint8_t adr_custom_list_us915[16] = ADR_CUSTOM_LIST_US915;
 static const uint8_t custom_nb_trans_us915     = CUSTOM_NB_TRANS_US915;
+
+/*!
+ * @brief ADR custom list and retransmission definition for WW2G4 region
+ */
+static const uint8_t adr_custom_list_ww2g4[16] = ADR_CUSTOM_LIST_WW2G4;
+static const uint8_t custom_nb_trans_ww2g4     = CUSTOM_NB_TRANS_WW2G4;
 
 /*
  * -----------------------------------------------------------------------------
@@ -279,9 +282,10 @@ int main( void )
         HAL_DBG_TRACE_ERROR( "Failed to get LR11XX firmware version\n" );
         mcu_panic( );
     }
-    if( lr11xx_fw_version.fw != LR11XX_FW_VERSION )
+    if( ( ( lr11xx_fw_version.fw != LR1110_FW_VERSION ) && ( lr11xx_fw_version.type = LR1110_FW_TYPE ) ) &&
+        ( ( lr11xx_fw_version.fw != LR1120_FW_VERSION ) && ( lr11xx_fw_version.type = LR1120_FW_TYPE ) ) )
     {
-        HAL_DBG_TRACE_ERROR( "Wrong LR11XX firmware version, expected 0x%04X, got 0x%04X\n", LR11XX_FW_VERSION,
+        HAL_DBG_TRACE_ERROR( "Wrong LR11XX firmware version, expected 0x%04X, got 0x%04X\n", LR1110_FW_VERSION,
                              lr11xx_fw_version.fw );
         mcu_panic( );
     }
@@ -441,7 +445,7 @@ static void on_middleware_gnss_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "GNSS middleware event - SCAN DONE\n" );
         gnss_mw_get_event_data_scan_done( &event_data );
-        gnss_mw_display_results( event_data );
+        gnss_mw_display_results( &event_data );
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_TERMINATED ) )
@@ -454,7 +458,7 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         HAL_DBG_TRACE_INFO( "GNSS middleware event - TERMINATED\n" );
         gnss_mw_get_event_data_terminated( &event_data );
         HAL_DBG_TRACE_PRINTF( "TERMINATED info:\n" );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", event_data.nb_scan_sent );
+        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", event_data.nb_scans_sent );
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_SCAN_CANCELLED ) )
@@ -515,38 +519,38 @@ static void on_middleware_gnss_event( uint8_t pending_events )
 void configure_adr( void )
 {
     smtc_modem_region_t region;
+
     ASSERT_SMTC_MODEM_RC( smtc_modem_get_region( stack_id, &region ) );
 
+    /* Set the ADR profile once joined */
     switch( region )
     {
     case SMTC_MODEM_REGION_EU_868:
-    {
-        HAL_DBG_TRACE_INFO( "Set ADR custom profile for EU868\n" );
-        ASSERT_SMTC_MODEM_RC(
-            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_eu868 ) );
-        ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans_eu868 ) );
-        break;
-    }
+    case SMTC_MODEM_REGION_IN_865:
+    case SMTC_MODEM_REGION_RU_864:
+    case SMTC_MODEM_REGION_AU_915:
+    case SMTC_MODEM_REGION_AS_923_GRP1:
+    case SMTC_MODEM_REGION_AS_923_GRP2:
+    case SMTC_MODEM_REGION_AS_923_GRP3:
     case SMTC_MODEM_REGION_CN_470:
     case SMTC_MODEM_REGION_CN_470_RP_1_0:
-    {
-        HAL_DBG_TRACE_INFO( "Set ADR custom profile for CN470\n" );
+    case SMTC_MODEM_REGION_KR_920:
         ASSERT_SMTC_MODEM_RC(
-            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_cn470 ) );
-        ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans_cn470 ) );
+            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_dr5_dr3 ) );
+        ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans_dr5_dr3 ) );
         break;
-    }
     case SMTC_MODEM_REGION_US_915:
-    {
-        HAL_DBG_TRACE_INFO( "Set ADR custom profile for US915\n" );
         ASSERT_SMTC_MODEM_RC(
             smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_us915 ) );
         ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans_us915 ) );
         break;
-    }
+    case SMTC_MODEM_REGION_WW2G4:
+        ASSERT_SMTC_MODEM_RC(
+            smtc_modem_adr_set_profile( stack_id, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_ww2g4 ) );
+        ASSERT_SMTC_MODEM_RC( smtc_modem_set_nb_trans( stack_id, custom_nb_trans_ww2g4 ) );
+        break;
     default:
-        HAL_DBG_TRACE_ERROR( "Region not supported by this example.\n" );
-        mcu_panic( );
+        HAL_DBG_TRACE_ERROR( "Region not supported in this example, could not set custom ADR profile\n" );
         break;
     }
 

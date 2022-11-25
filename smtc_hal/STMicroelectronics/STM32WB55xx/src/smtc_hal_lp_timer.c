@@ -64,7 +64,7 @@
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-static LPTIM_HandleTypeDef lptim_handle;
+static LPTIM_HandleTypeDef lptim_handle = { 0 };
 
 static hal_lp_timer_irq_t lptim_tmr_irq = { .context = NULL, .callback = NULL };
 

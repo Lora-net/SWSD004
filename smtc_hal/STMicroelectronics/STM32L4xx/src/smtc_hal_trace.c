@@ -85,7 +85,7 @@ void hal_trace_print_var( const char* fmt, ... )
 void hal_trace_print( const char* fmt, va_list argp )
 {
     char string[PRINT_BUFFER_SIZE];
-    if( 0 < vsprintf( string, fmt, argp ) )  // build string
+    if( 0 < vsnprintf( string, PRINT_BUFFER_SIZE, fmt, argp ) )  // build string
     {
         hal_uart_tx( HAL_PRINTF_UART_ID, ( uint8_t* ) string, strlen( string ) );
     }

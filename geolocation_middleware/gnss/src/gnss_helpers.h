@@ -56,18 +56,13 @@ extern "C" {
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
-/*!
- * @brief Maximal number of Space Vehicules to search for in a GNSS scan
- */
-#define GNSS_MAX_NB_SAT 10
-
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
  */
 
 /**
- * @brief The return codes that can be received on GNSS get results
+ * @brief Return codes for GNSS get results
  */
 typedef enum
 {
@@ -87,46 +82,46 @@ typedef enum
 /*!
  * @brief Manually sets an assistance position for assisted scan
  *
- * @param [in] ral_context Chip implementation context
+ * @param [in] radio_context Chip implementation context
  * @param [in] assistance_position Assistance position to use for next assisted GNSS scan
  *
- * @return a boolean: true for success, false otherwise.
+ * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_set_assistance_position( const void*                                    ral_context,
-                                        const lr11xx_gnss_solver_assistance_position_t assistance_position );
+bool smtc_gnss_set_assistance_position( const void*                                     radio_context,
+                                        const lr11xx_gnss_solver_assistance_position_t* assistance_position );
 
 /*!
  * @brief Push a message received from the geolocation solver to the LR11XX
  *
- * @param [in] ral_context Chip implementation context
+ * @param [in] radio_context Chip implementation context
  * @param [in] payload Message received from the solver to be pushed to the LR11XX
  * @param [in] payload_size Message payload size
  *
- * @return a boolean: true for success, false otherwise.
+ * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_push_solver_msg( const void* ral_context, const uint8_t* payload, const uint16_t payload_size );
+bool smtc_gnss_push_solver_msg( const void* radio_context, const uint8_t* payload, const uint16_t payload_size );
 
 /*!
  * @brief Get current almanac CRC from LR11xx radio
  *
- * @param [in] ral_context Chip implementation context
- * @param [out] almanac_crc The current almanac CRC stored in LR11XX
+ * @param [in] radio_context Chip implementation context
+ * @param [out] almanac_crc Current almanac CRC stored in LR11XX
  *
- * @return a boolean: true for success, false otherwise.
+ * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_get_almanac_crc( const void* ral_context, uint32_t* almanac_crc );
+bool smtc_gnss_get_almanac_crc( const void* radio_context, uint32_t* almanac_crc );
 
 /*!
  * @brief Start a GNSS scan
  *
- * @param [in] ral_context Chip implementation context
- * @param [in] date The date to use for GNSS scan operation
+ * @param [in] radio_context Chip implementation context
+ * @param [in] date Date to use for GNSS scan operation
  * @param [in] assisted Indicate if autonomous (if value is false) or assisted (if value is true) scan is requested
  * @param [in] constellations Mask of the constellations to be used for the scan
  *
- * @return a boolean: true for success, false otherwise.
+ * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_scan( const void* ral_context, uint32_t date, bool assisted,
+bool smtc_gnss_scan( const void* radio_context, uint32_t date, bool assisted,
                      lr11xx_gnss_constellation_mask_t constellations );
 
 /*!
@@ -137,52 +132,60 @@ void smtc_gnss_scan_ended( void );
 /*!
  * @brief Fetch the result of last GNSS scan operation
  *
- * @param [in] ral_context Chip implementation context
- * @param [in] results_max_size The size of the results array given to store scan results.
+ * @param [in] radio_context Chip implementation context
+ * @param [in] results_max_size Size of the results array given to store scan results
  * @param [out] res_sz Length of the raw result buffer returned by the radio
- * @param [out] results Pointer to a buffer that will be filled with raw result buffer.
+ * @param [out] results Pointer to a buffer that will be filled with raw result buffer
  *
  * @return get results return code as defined in @ref smtc_gnss_get_results_return_code_t
  */
-smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* ral_context, const uint8_t results_max_size,
+smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* radio_context, const uint8_t results_max_size,
                                                            uint8_t* res_sz, uint8_t* results );
 
 /*!
  * @brief Get detailed info of detected SVs
  *
- * @param [in] ral_context Chip implementation context
- * @param [out] nb_detected_sv The number of Space Vehicules detected in last scan.
- * @param [out] sv_info Information about Space Vehicules detected in last scan.
+ * @param [in] radio_context Chip implementation context
+ * @param [in] sv_info_max_size Size of the sv_info array to fill with detected space vehicle information
+ * @param [out] nb_detected_sv Number of Space Vehicles detected in last scan
+ * @param [out] sv_info Pointer to an array of structures of size big enough to contain
+ * nb_detected_sv elements. Information about Space Vehicles detected in last scan
  *
- * @return a boolean: true for success, false otherwise.
+ * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_get_sv_info( const void* ral_context, uint8_t* nb_detected_sv,
+bool smtc_gnss_get_sv_info( const void* radio_context, const uint8_t sv_info_max_size, uint8_t* nb_detected_sv,
                             lr11xx_gnss_detected_satellite_t* sv_info );
 
 /*!
  * @brief Get the power consumption of the last scan
  *
- * @param [in] ral_context Chip implementation context
- * @param [out] power_consumption_uah The number power consumption of the last scan in uAh.
+ * @param [in] radio_context Chip implementation context
+ * @param [out] power_consumption_uah Power consumption of the last scan in uAh
  *
- * @return a boolean: true for success, false otherwise.
+ * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_get_power_consumption( const void* ral_context, uint32_t* power_consumption_uah );
+bool smtc_gnss_get_power_consumption( const void* radio_context, uint32_t* power_consumption_uah );
 
 /*!
  * @brief Read the current scan context (almanac CRC, aiding position....)
  *
- * @param [in] ral_context Chip implementation context
- * @param [out] aiding_position the aiding position which is currently written in the LR11xx radio
- * @param [out] almanac_crc the almanac CRC of the current almanac written in the LR11xx radio
+ * @param [in] radio_context Chip implementation context
+ * @param [out] aiding_position Aiding position which is currently written in the LR11xx radio
+ * @param [out] almanac_crc Almanac CRC of the current almanac written in the LR11xx radio
  *
  * @return a boolean: true for success, false otherwise.
  */
-bool smtc_gnss_get_scan_context( const void* ral_context, lr11xx_gnss_solver_assistance_position_t* aiding_position,
+bool smtc_gnss_get_scan_context( const void* radio_context, lr11xx_gnss_solver_assistance_position_t* aiding_position,
                                  uint32_t* almanac_crc );
 
 /*!
- * @brief TODO
+ * @brief Check if the given NAV message is valid (would allow the solver to return a position)
+ *
+ * @param [in] constellations Constellations used
+ * @param [in] nb_detected_satellites Number of detected space vehicles
+ * @param [in] detected_satellites Space vehicles detected
+ *
+ * @return a boolean: true if the NAV message is valid, false otherwise
  */
 bool smtc_gnss_is_nav_message_valid( const lr11xx_gnss_constellation_mask_t constellations,
                                      uint8_t                                nb_detected_satellites,

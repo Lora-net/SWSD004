@@ -33,9 +33,7 @@
 
 RADIO = lr1110
 
-RADIO_MAKEFILE = $(TOP_DIR)/shields/LR11XX/lr11xx.mk
-
-include $(RADIO_MAKEFILE)
+RP_MARGIN_DELAY = 33
 
 ######################################
 # source
@@ -44,6 +42,7 @@ include $(RADIO_MAKEFILE)
 # C sources
 
 C_SOURCES +=  \
+$(TOP_DIR)/shields/LR11XX/radio_drivers_hal/lr11xx_hal.c\
 $(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/Leds/leds.c\
 $(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/lis2de12/lis2de12.c\
 $(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/usr_button/usr_button.c\
@@ -62,9 +61,15 @@ endif
 
 # C includes
 C_INCLUDES +=  \
+-I$(LORA_BASICS_MODEM)/smtc_modem_core/radio_drivers/lr11xx_driver/src \
+-I$(LORA_BASICS_MODEM)/smtc_modem_core/smtc_ralf/src \
+-I$(LORA_BASICS_MODEM)/smtc_modem_core/smtc_ral/src \
+-I$(TOP_DIR)/shields/LR11XX/radio_drivers_hal \
+-I$(TOP_DIR)/shields/LR11XX/smtc_lr11xx_board \
 -I$(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/lis2de12/ \
 -I$(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/Leds/ \
 -I$(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/usr_button/ \
 -I$(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/peripherals/hall_effect/ \
 -I$(TOP_DIR)/shields/LR11XX/LR1110TRK1xKS/BSP/board/ \
 -I$(TOP_DIR)/shields/interface
+

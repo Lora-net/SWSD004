@@ -42,18 +42,12 @@
 #include "lr1110_trk1xks_board.h"
 #include "smtc_lr11xx_board.h"
 #include "smtc_board.h"
-#include "lorawan_key_config.h"
 #include "smtc_board_ralf.h"
 #include "ralf_lr11xx.h"
 #include "lr11xx_hal_context.h"
 #include "smtc_modem_test_api.h"
-#include "lr11xx_types.h"
-#include "lr11xx_system.h"
-#include "lr11xx_system_types.h"
-#include "lr11xx_gnss.h"
+#include "smtc_modem_hal.h"
 #include "lr11xx_hal.h"
-#include "smtc_modem_hal_dbg_trace.h"
-#include "apps_utilities.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -100,6 +94,16 @@ typedef struct
     bool          timer_initialized; /*!< @brief True if the pulse timer has been initialized, false otherwise */
 } smtc_board_periodic_led_pulse_ctx_t;
 
+/*!
+ * @brief Define the max tx power supported
+ */
+int8_t max_tx_power_supported = 22;
+
+/*!
+ * @brief Define the battery level in percentage
+ */
+uint8_t battery_level = 100;
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE VARIABLES -------------------------------------------------------
@@ -137,6 +141,11 @@ static lr11xx_hal_context_t radio_context = {
     .reset  = SMTC_RADIO_NRST,
     .spi_id = HAL_RADIO_SPI_ID,
 };
+
+/*!
+ * @brief ralf_t object corresponding to the board
+ */
+static ralf_t local_ralf = { 0 };
 
 /*
  * -----------------------------------------------------------------------------
@@ -229,45 +238,6 @@ bool smtc_board_get_usr_button( void )
     {
         return false;
     }
-}
-
-bool smtc_board_get_almanac_dates( const void* context, uint32_t* oldest_almanac_date, uint32_t* newest_almanac_date )
-{
-    lr11xx_status_t status       = LR11XX_STATUS_ERROR;
-    uint8_t         i            = 0;
-    uint16_t        almanac_date = 0;
-
-    *oldest_almanac_date = 0;
-    *newest_almanac_date = 0;
-
-    for( i = 0; i < 127; i++ )
-    {
-        status = lr11xx_gnss_get_almanac_age_for_satellite( context, i, &almanac_date );
-        if( status != LR11XX_STATUS_OK )
-        {
-            return false;
-        }
-        if( almanac_date > 0 )
-        {
-            if( ( *oldest_almanac_date == 0 ) && ( *newest_almanac_date == 0 ) )
-            {
-                *oldest_almanac_date = almanac_date;
-                *newest_almanac_date = almanac_date;
-            }
-            else
-            {
-                if( almanac_date < *oldest_almanac_date )
-                {
-                    *oldest_almanac_date = almanac_date;
-                }
-                if( almanac_date > *newest_almanac_date )
-                {
-                    *newest_almanac_date = almanac_date;
-                }
-            }
-        }
-    }
-    return true;
 }
 
 void smtc_board_wifi_prescan( void )
@@ -385,7 +355,7 @@ lr11xx_system_lfclk_cfg_t smtc_board_get_lf_clk( void ) { return LR11XX_SYSTEM_L
 
 void smtc_board_hall_effect_enable( bool enable )
 {
-    SMTC_MODEM_HAL_TRACE_PRINTF( "hall effect sensor enable : %d\n", enable );
+    HAL_DBG_TRACE_PRINTF( "hall effect sensor enable : %d\n", enable );
 
     if( enable == true )
     {
@@ -440,41 +410,44 @@ bool smtc_board_is_ready( void ) { return smtc_board_ready; }
 
 void smtc_board_set_ready( bool ready ) { smtc_board_ready = ready; }
 
-void smtc_board_measure_battery_drop( uint8_t stack_id, int32_t* drop, uint32_t* time_recovery )
+void smtc_board_measure_battery_drop( uint8_t stack_id, smtc_modem_region_t region, int32_t* drop,
+                                      uint32_t* time_recovery )
 {
     smtc_modem_return_code_t modem_return_code = SMTC_MODEM_RC_OK;
-    smtc_modem_region_t      region;
     uint32_t                 relaxed_voltage = 0;
     uint32_t                 tick_vdrop      = 0;
 
     relaxed_voltage = smtc_modem_hal_get_voltage( ) * 20;
 
-    modem_return_code = smtc_modem_get_region( stack_id, &region );
-
     /* Enter in test mode */
     modem_return_code = smtc_modem_test_start( );
     if( modem_return_code != SMTC_MODEM_RC_OK )
     {
-        SMTC_MODEM_HAL_TRACE_ERROR( "smtc_modem_test_start failed (%d)\n", modem_return_code );
+        HAL_DBG_TRACE_ERROR( "smtc_modem_test_start failed (%d)\n", modem_return_code );
     }
 
     switch( region )
     {
     case SMTC_MODEM_REGION_EU_868:
+    case SMTC_MODEM_REGION_IN_865:
+    case SMTC_MODEM_REGION_RU_864:
     {
-        modem_return_code = smtc_modem_test_tx( NULL, 51, 868100000, 14, SMTC_MODEM_TEST_LORA_SF12,
-                                                SMTC_MODEM_TEST_BW_125_KHZ, SMTC_MODEM_TEST_CR_4_5, 8, true );
+        modem_return_code = smtc_modem_test_tx_cw( 865500000, 14 );
         break;
     }
     case SMTC_MODEM_REGION_US_915:
+    case SMTC_MODEM_REGION_AU_915:
+    case SMTC_MODEM_REGION_AS_923_GRP1:
+    case SMTC_MODEM_REGION_AS_923_GRP2:
+    case SMTC_MODEM_REGION_AS_923_GRP3:
+    case SMTC_MODEM_REGION_KR_920:
     {
-        modem_return_code = smtc_modem_test_tx( NULL, 51, 915000000, 14, SMTC_MODEM_TEST_LORA_SF10,
-                                                SMTC_MODEM_TEST_BW_125_KHZ, SMTC_MODEM_TEST_CR_4_5, 8, true );
+        modem_return_code = smtc_modem_test_tx_cw( 920900000, 14 );
         break;
     }
     default:
     {
-        SMTC_MODEM_HAL_TRACE_ERROR( "This region is not covered by this test\n" );
+        HAL_DBG_TRACE_ERROR( "This region is not covered by this test\n" );
         break;
     }
     }
@@ -489,7 +462,7 @@ void smtc_board_measure_battery_drop( uint8_t stack_id, int32_t* drop, uint32_t*
     smtc_modem_test_nop( );
     smtc_modem_test_stop( );
 
-    SMTC_MODEM_HAL_TRACE_INFO( "Battery voltage drop = %d mV\n", *drop );
+    HAL_DBG_TRACE_INFO( "Battery voltage drop = %d mV\n", *drop );
 
     if( *drop > 0 )
     {
@@ -502,7 +475,7 @@ void smtc_board_measure_battery_drop( uint8_t stack_id, int32_t* drop, uint32_t*
             *time_recovery = hal_mcu_get_tick( ) - tick_vdrop;
         }
 
-        SMTC_MODEM_HAL_TRACE_INFO( "Voltage recovery time = %d ms\n", *time_recovery );
+        HAL_DBG_TRACE_INFO( "Voltage recovery time = %d ms\n", *time_recovery );
     }
 }
 
@@ -610,12 +583,22 @@ void smtc_board_leds_blink( uint8_t leds, uint32_t delay, uint8_t nb_blink )
 
 ralf_t* smtc_board_initialise_and_get_ralf( void )
 {
-    static ralf_t local_ralf = { 0 };
-    local_ralf               = ( ralf_t ) RALF_LR11XX_INSTANTIATE( &radio_context );
+    local_ralf = ( ralf_t ) RALF_LR11XX_INSTANTIATE( &radio_context );
     return &local_ralf;
 }
 
 int smtc_board_get_tx_power_offset( void ) { return BOARD_TX_POWER_OFFSET; }
+
+void smtc_board_set_max_tx_power_supported( int8_t max_tx_power )
+{
+    max_tx_power_supported = max_tx_power;
+}
+
+int8_t smtc_board_get_max_tx_power_supported( void ) { return max_tx_power_supported; }
+
+void smtc_board_set_battery_level( uint8_t battery_level_percentage ) { battery_level = battery_level_percentage; }
+
+uint8_t smtc_board_get_battery_level( void ) { return battery_level; }
 
 void smtc_board_reset_radio( const void* context ) { lr11xx_hal_reset( context ); }
 

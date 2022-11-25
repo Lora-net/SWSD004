@@ -80,7 +80,7 @@ To take into account the fact that any uplink can be lost over-the-air, the Appl
 
   - if the last item received has **last NAV message** bit set: the current scan group is terminated and a multiframe request can be prepared.
   - if the last item received has a **group token** value that is different from the one before: the last item of the previous scan group has been lost over-the-air, and it is terminated. A multiframe request of the previous scan group can then be prepared.
-  - the last item received has a **group token** value that is different from the one before and it has **last NAV message** bit set: the previous scan group has terminated and the one being received also. A multiframe request for the previous scan group can be prepared, and a second GNSS solving request can be prepared for the last item received. Here the second multiframe request will contain only one NAV message.
+  - the last item received has a **group token** value that is different from the one before and it has **last NAV message** bit set: the previous scan group has terminated and the one being received also. A multiframe request for the previous scan group can be prepared, and a second GNSS solving request can be prepared for the last item received. Here the second request will contain only one NAV message (single frame request).
 
 The preparation of multiframe request is described here: https://www.loracloud.com/documentation/modem_services?url=gls.html#apiv1solvegnssmulti. The multiframe request shall contain NAV messages of all items belonging to the same scan group.
 
@@ -99,6 +99,8 @@ As the middleware does not add the RSSI of the MAC addresses detected, this form
 
 Application Server block diagram
 --------------------------------
+
+This diagram is a simplified view an implementation of the application server, aiming to show the different LoRaCloud APIs to be used.
 
 .. _fig_docApplicationServerBlockDiagram:
 

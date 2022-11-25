@@ -39,6 +39,7 @@
 #include <string.h>
 
 #include "gnss_helpers.h"
+#include "gnss_helpers_defs.h"
 
 #include "mw_assert.h"
 #include "mw_dbg_trace.h"
@@ -78,12 +79,14 @@
 /*!
  * @brief Configure and start scan operation (autonomous or assisted)
  *
- * @param[in] ral_context Chip implementation context
+ * @param[in] radio_context Chip implementation context
  * @param[in] date Current date
  * @param[in] assisted Request an assisted (if true) or autonomous scan (if false)
  * @param[in] constellations Mask of the constellations to be used for the scan
+ *
+ * @return a boolean: true for success, false otherwise
  */
-static bool gnss_scan( const void* ral_context, lr11xx_gnss_date_t date, bool assisted,
+static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, bool assisted,
                        lr11xx_gnss_constellation_mask_t constellations );
 
 /*!
@@ -91,6 +94,8 @@ static bool gnss_scan( const void* ral_context, lr11xx_gnss_date_t date, bool as
  *
  * @param[in] buffer Buffer containing the result to be parsed
  * @param[in] buffer_length Length of the given result buffer
+ *
+ * @return a boolean: true for success, false otherwise
  */
 static inline bool gnss_is_result_to_solver( const uint8_t* buffer, uint8_t buffer_length );
 
@@ -99,6 +104,8 @@ static inline bool gnss_is_result_to_solver( const uint8_t* buffer, uint8_t buff
  *
  * @param[in] buffer Buffer containing the result to be parsed
  * @param[in] buffer_length Length of the given result buffer
+ *
+ * @return a boolean: true for success, false otherwise
  */
 static inline bool gnss_is_result_to_host( const uint8_t* buffer, uint8_t buffer_length );
 
@@ -107,10 +114,10 @@ static inline bool gnss_is_result_to_host( const uint8_t* buffer, uint8_t buffer
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
 
-bool smtc_gnss_set_assistance_position( const void*                                    ral_context,
-                                        const lr11xx_gnss_solver_assistance_position_t assistance_position )
+bool smtc_gnss_set_assistance_position( const void*                                     radio_context,
+                                        const lr11xx_gnss_solver_assistance_position_t* assistance_position )
 {
-    if( lr11xx_gnss_set_assistance_position( ral_context, &assistance_position ) != LR11XX_STATUS_OK )
+    if( lr11xx_gnss_set_assistance_position( radio_context, assistance_position ) != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set assistance position\n" );
         return false;
@@ -119,9 +126,9 @@ bool smtc_gnss_set_assistance_position( const void*                             
     return true;
 }
 
-bool smtc_gnss_push_solver_msg( const void* ral_context, const uint8_t* payload, const uint16_t payload_size )
+bool smtc_gnss_push_solver_msg( const void* radio_context, const uint8_t* payload, const uint16_t payload_size )
 {
-    if( lr11xx_gnss_push_solver_msg( ral_context, payload, payload_size ) != LR11XX_STATUS_OK )
+    if( lr11xx_gnss_push_solver_msg( radio_context, payload, payload_size ) != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to push solver msg\n" );
         return false;
@@ -130,13 +137,13 @@ bool smtc_gnss_push_solver_msg( const void* ral_context, const uint8_t* payload,
     return true;
 }
 
-bool smtc_gnss_get_almanac_crc( const void* ral_context, uint32_t* almanac_crc )
+bool smtc_gnss_get_almanac_crc( const void* radio_context, uint32_t* almanac_crc )
 {
     lr11xx_status_t                         err;
     lr11xx_gnss_context_status_bytestream_t context_status_bytestream;
     lr11xx_gnss_context_status_t            context_status;
 
-    err = lr11xx_gnss_get_context_status( ral_context, context_status_bytestream );
+    err = lr11xx_gnss_get_context_status( radio_context, context_status_bytestream );
     if( err != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to get gnss context status\n" );
@@ -155,19 +162,19 @@ bool smtc_gnss_get_almanac_crc( const void* ral_context, uint32_t* almanac_crc )
     return true;
 }
 
-bool smtc_gnss_scan( const void* ral_context, uint32_t date, bool assisted,
+bool smtc_gnss_scan( const void* radio_context, uint32_t date, bool assisted,
                      lr11xx_gnss_constellation_mask_t constellations )
 {
-    bool status = false;
+    bool status;
 
-    status = lr11xx_configure_for_scan( ral_context );
+    status = mw_radio_configure_for_scan( radio_context );
     if( status == true )
     {
         /* Enable LNA for GNSS with LR11XX Evaluation board with passive antenna */
         mw_bsp_gnss_prescan_actions( );
 
         /* Start scan */
-        status = gnss_scan( ral_context, ( lr11xx_gnss_date_t ) date, assisted, constellations );
+        status = gnss_scan( radio_context, ( lr11xx_gnss_date_t ) date, assisted, constellations );
         if( status == false )
         {
             MW_DBG_TRACE_ERROR( "gnss_scan() failed\n" );
@@ -190,20 +197,20 @@ void smtc_gnss_scan_ended( void )
     mw_bsp_gnss_postscan_actions( );
 }
 
-bool smtc_gnss_get_scan_context( const void* ral_context, lr11xx_gnss_solver_assistance_position_t* aiding_position,
+bool smtc_gnss_get_scan_context( const void* radio_context, lr11xx_gnss_solver_assistance_position_t* aiding_position,
                                  uint32_t* almanac_crc )
 {
     lr11xx_status_t status;
     bool            err;
 
-    status = lr11xx_gnss_read_assistance_position( ral_context, aiding_position );
+    status = lr11xx_gnss_read_assistance_position( radio_context, aiding_position );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to read assistance position from LR11xx\n" );
         return false;
     }
 
-    err = smtc_gnss_get_almanac_crc( ral_context, almanac_crc );
+    err = smtc_gnss_get_almanac_crc( radio_context, almanac_crc );
     if( err != true )
     {
         MW_DBG_TRACE_ERROR( "Failed to read almanac CRC from LR11xx\n" );
@@ -213,179 +220,159 @@ bool smtc_gnss_get_scan_context( const void* ral_context, lr11xx_gnss_solver_ass
     return true;
 }
 
-smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* ral_context, const uint8_t results_max_size,
+smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* radio_context, const uint8_t results_max_size,
                                                            uint8_t* res_sz, uint8_t* results )
 {
     lr11xx_status_t status;
     uint16_t        result_size;
 
-    /* Initialize output value */
+    /* Initialize output value, in case this function returns with an error */
     *res_sz = 0;
 
-    /* This do/while construction is a mechanism to break execution flow only in forward direction as soon as
-    something wrong is detected (and the break is called). It allows to have a single point of exit even though the
-    sequence of commands in the do clause can break in many points. */
-    smtc_gnss_get_results_return_code_t rc = SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
-    do
+    /* Use read result API to fetch the result buffer */
+    status = lr11xx_gnss_get_result_size( radio_context, &result_size );
+    if( status != LR11XX_STATUS_OK )
     {
-        /* 1. Use read result API to fetch the result buffer */
-        status = lr11xx_gnss_get_result_size( ral_context, &result_size );
-        if( status != LR11XX_STATUS_OK )
-        {
-            MW_DBG_TRACE_ERROR( "Failed to get GNSS scan result size\n" );
-            rc = SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
-            break;
-        }
+        MW_DBG_TRACE_ERROR( "Failed to get GNSS scan result size\n" );
+        return SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
+    }
 
-        if( result_size > results_max_size )
-        {
-            MW_DBG_TRACE_ERROR( "GNSS scan result size exceeds %d (%u)\n", results_max_size, result_size );
-            rc = SMTC_GNSS_GET_RESULTS_ERROR_BUFFER_SIZE;
-            break;
-        }
+    if( result_size > results_max_size )
+    {
+        MW_DBG_TRACE_ERROR( "GNSS scan result size exceeds %d (%u)\n", results_max_size, result_size );
+        return SMTC_GNSS_GET_RESULTS_ERROR_BUFFER_SIZE;
+    }
 
-        status = lr11xx_gnss_read_results( ral_context, results, result_size );
-        if( status != LR11XX_STATUS_OK )
-        {
-            MW_DBG_TRACE_ERROR( "Failed to get result\n" );
-            rc = SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
-            break;
-        }
+    status = lr11xx_gnss_read_results( radio_context, results, result_size );
+    if( status != LR11XX_STATUS_OK )
+    {
+        MW_DBG_TRACE_ERROR( "Failed to get result\n" );
+        return SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
+    }
 
-        /* 2. Check if the message read from read result API is a NAV message or not. If it is not,print the
-        appropriate error message */
-        if( gnss_is_result_to_solver( results, result_size ) == false )
+    /* Check if the message read from read result API is a NAV message or not. If it is not, print the
+    appropriate error message */
+    if( gnss_is_result_to_solver( results, result_size ) == false )
+    {
+        /* The result read is for the solver, it is probably an error message. */
+        if( gnss_is_result_to_host( results, result_size ) == true )
         {
-            /* The result read is not destinated to solver, it is probably an error message. */
-            if( gnss_is_result_to_host( results, result_size ) == true )
+            const lr11xx_gnss_message_host_status_t status_code_raw = ( lr11xx_gnss_message_host_status_t ) results[1];
+            switch( status_code_raw )
             {
-                const lr11xx_gnss_message_host_status_t status_code_raw =
-                    ( lr11xx_gnss_message_host_status_t ) results[1];
-                switch( status_code_raw )
-                {
-                case LR11XX_GNSS_HOST_NO_TIME:
-                {
-                    MW_DBG_TRACE_ERROR( "GNSS error: NO TIME\n" );
-                    rc = SMTC_GNSS_GET_RESULTS_ERROR_NO_TIME;
-                    break;
-                }
-                case LR11XX_GNSS_HOST_NO_SATELLITE_DETECTED:
-                {
-                    MW_DBG_TRACE_INFO( "GNSS error: NO SATELLITE\n" );
-                    rc = SMTC_GNSS_GET_RESULTS_NO_ERROR; /* not an error */
-                    break;
-                }
-                case LR11XX_GNSS_HOST_ALMANAC_IN_FLASH_TOO_OLD:
-                {
-                    MW_DBG_TRACE_ERROR( "GNSS error: ALMANAC TOO OLD\n" );
-                    rc = SMTC_GNSS_GET_RESULTS_ERROR_ALMANAC;
-                    break;
-                }
-                case LR11XX_GNSS_HOST_NOT_ENOUGH_SV_DETECTED_TO_BUILD_A_NAV_MESSAGE:
-                {
-                    MW_DBG_TRACE_INFO( "GNSS error: NOT ENOUGH SVs TO BUILD A NAV MESSAGE\n" );
-                    rc = SMTC_GNSS_GET_RESULTS_NO_ERROR; /* not an error */
-                    break;
-                }
-                default:
-                {
-                    MW_DBG_TRACE_ERROR( "GNSS error: UNKNOWN ERROR CODE: 0x%02X\n", status_code_raw );
-                    rc = SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
-                }
-                }
-            }
-            else
+            case LR11XX_GNSS_HOST_NO_TIME:
             {
-                MW_DBG_TRACE_ERROR(
-                    "GNSS error: NAV message is neither for host nor for solver. Destination byte: 0x%02x\n",
-                    results[0] );
-                rc = SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
+                MW_DBG_TRACE_ERROR( "GNSS error: NO TIME\n" );
+                return SMTC_GNSS_GET_RESULTS_ERROR_NO_TIME;
             }
-            break;
+            case LR11XX_GNSS_HOST_NO_SATELLITE_DETECTED:
+            {
+                MW_DBG_TRACE_INFO( "GNSS error: NO SATELLITE\n" );
+                return SMTC_GNSS_GET_RESULTS_NO_ERROR; /* not an error */
+            }
+            case LR11XX_GNSS_HOST_ALMANAC_IN_FLASH_TOO_OLD:
+            {
+                MW_DBG_TRACE_ERROR( "GNSS error: ALMANAC TOO OLD\n" );
+                return SMTC_GNSS_GET_RESULTS_ERROR_ALMANAC;
+            }
+            case LR11XX_GNSS_HOST_NOT_ENOUGH_SV_DETECTED_TO_BUILD_A_NAV_MESSAGE:
+            {
+                MW_DBG_TRACE_INFO( "GNSS error: NOT ENOUGH SVs TO BUILD A NAV MESSAGE\n" );
+                return SMTC_GNSS_GET_RESULTS_NO_ERROR; /* not an error */
+            }
+            default:
+            {
+                MW_DBG_TRACE_ERROR( "GNSS error: UNKNOWN ERROR CODE: 0x%02X\n", status_code_raw );
+                return SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
+            }
+            }
         }
         else
         {
-            /* The result read is destinated to solver, check if there is an error status. */
-            const uint8_t status_code_raw = results[1];
-            if( status_code_raw == 0x00 )
-            {
-                MW_DBG_TRACE_ERROR( "GNSS error: NO ASSISTANCE POSITION\n" );
-                MW_DBG_TRACE_ARRAY( "results", results, result_size );
-                rc = SMTC_GNSS_GET_RESULTS_ERROR_AIDING_POS;
-                break;
-            }
+            MW_DBG_TRACE_ERROR(
+                "GNSS error: NAV message is neither for host nor for solver. Destination byte: 0x%02x\n", results[0] );
+            return SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN;
         }
+    }
+    else
+    {
+        /* The result read is for the solver, check if there is an error status. */
+        const uint8_t status_code_raw = results[1];
+        if( status_code_raw == 0x00 )
+        {
+            MW_DBG_TRACE_ERROR( "GNSS error: NO ASSISTANCE POSITION\n" );
+            MW_DBG_TRACE_ARRAY( "results", results, result_size );
+            return SMTC_GNSS_GET_RESULTS_ERROR_AIDING_POS;
+        }
+    }
 
-        /* 3. Remove the destination byte (first byte) which does not need to be sent over the air */
-        memmove( results, results + 1, result_size - 1 );
+    /* Remove the destination byte (first byte) which does not need to be sent over the air */
+    memmove( results, results + 1, result_size - 1 );
 
-        /* 4. Set the returned buffer size without the destination byte */
-        *res_sz = result_size - 1;
+    /* Set the returned buffer size without the destination byte */
+    *res_sz = result_size - 1;
 
-        rc = SMTC_GNSS_GET_RESULTS_NO_ERROR;
-    } while( 0 );
-
-    return rc;
+    return SMTC_GNSS_GET_RESULTS_NO_ERROR;
 }
 
-bool smtc_gnss_get_sv_info( const void* ral_context, uint8_t* nb_detected_sv,
+bool smtc_gnss_get_sv_info( const void* radio_context, const uint8_t sv_info_max_size, uint8_t* nb_detected_sv,
                             lr11xx_gnss_detected_satellite_t* sv_info )
 {
     lr11xx_status_t status;
 
-    /* Initialize output values */
+    /* Initialize output values, in case this function returns with an error */
     *nb_detected_sv = 0;
 
-    bool success = false;
-    do
+    /* Fetch the detected SVs */
+    status = lr11xx_gnss_get_nb_detected_satellites( radio_context, nb_detected_sv );
+    if( status != LR11XX_STATUS_OK )
     {
-        /* 5. The result read if destinated to solver, it is a NAV message, so SVs have been possibly detected.
-        Fetch the detected SVs. */
-        status = lr11xx_gnss_get_nb_detected_satellites( ral_context, nb_detected_sv );
-        if( status != LR11XX_STATUS_OK )
-        {
-            MW_DBG_TRACE_ERROR( "Failed to get number of satellites detected\n" );
-            success = false;
-            break;
-        }
+        MW_DBG_TRACE_ERROR( "Failed to get number of satellites detected\n" );
+        return false;
+    }
 
-        /* 6. Get details about detected SVs */
-        status = lr11xx_gnss_get_detected_satellites( ral_context, *nb_detected_sv, sv_info );
-        if( status != LR11XX_STATUS_OK )
-        {
-            MW_DBG_TRACE_ERROR( "Failed to get detected satellites\n" );
-            success = false;
-            break;
-        }
+    if( *nb_detected_sv > sv_info_max_size )
+    {
+        MW_DBG_TRACE_ERROR( "Cannot store info of all detected SVs (%u: max:%u)\n", nb_detected_sv, sv_info_max_size );
+        return false;
+    }
 
-        success = true;
-    } while( 0 );
+    /* Get details about detected SVs */
+    status = lr11xx_gnss_get_detected_satellites( radio_context, *nb_detected_sv, sv_info );
+    if( status != LR11XX_STATUS_OK )
+    {
+        MW_DBG_TRACE_ERROR( "Failed to get detected satellites\n" );
+        return false;
+    }
 
-    return success;
+    return true;
 }
 
-bool smtc_gnss_get_power_consumption( const void* ral_context, uint32_t* power_consumption_uah )
+bool smtc_gnss_get_power_consumption( const void* radio_context, uint32_t* power_consumption_uah )
 {
     lr11xx_status_t                  status;
     lr11xx_gnss_timings_t            timings;
     lr11xx_gnss_constellation_mask_t constellation_used;
     lr11xx_system_reg_mode_t         reg_mode;
 
-    status = lr11xx_gnss_get_timings( ral_context, &timings );
+    /* Initialize output values, in case this function returns with an error */
+    *power_consumption_uah = 0;
+
+    status = lr11xx_gnss_get_timings( radio_context, &timings );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to get gnss timings\n" );
         return false;
     }
 
-    status = lr11xx_gnss_read_used_constellations( ral_context, &constellation_used );
+    status = lr11xx_gnss_read_used_constellations( radio_context, &constellation_used );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to get gnss constellation used\n" );
         return false;
     }
 
-    mw_bsp_get_lr11xx_reg_mode( ral_context, &reg_mode );
+    mw_bsp_get_lr11xx_reg_mode( radio_context, &reg_mode );
     *power_consumption_uah = lr11xx_gnss_get_consumption( reg_mode, timings, constellation_used );
 
     return true;
@@ -405,7 +392,7 @@ bool smtc_gnss_is_nav_message_valid( const lr11xx_gnss_constellation_mask_t cons
 
         GPS satellites ID [0 31]
         SBAS satellites ID [32 63] but not used
-        BEIDOU satellites ID [64 128].
+        BEIDOU satellites ID [64 127].
     */
     if( nb_detected_satellites >= 5 )
     {
@@ -421,7 +408,7 @@ bool smtc_gnss_is_nav_message_valid( const lr11xx_gnss_constellation_mask_t cons
             }
             /* Ignore SBAS */
             /* Check if it's a BEIDOU satellite */
-            if( ( detected_satellites[i].satellite_id >= 64 ) && ( detected_satellites[i].satellite_id <= 128 ) )
+            if( ( detected_satellites[i].satellite_id >= 64 ) && ( detected_satellites[i].satellite_id <= 127 ) )
             {
                 beidou_sv_cnt++;
             }
@@ -444,7 +431,7 @@ bool smtc_gnss_is_nav_message_valid( const lr11xx_gnss_constellation_mask_t cons
         {
             /* Dual constellations */
             if( ( ( gps_sv_cnt >= 2 ) && ( beidou_sv_cnt >= 2 ) && ( ( gps_sv_cnt + beidou_sv_cnt ) >= 6 ) ) ||
-                ( ( ( gps_sv_cnt >= 5 ) || ( beidou_sv_cnt >= 5 ) ) && ( ( gps_sv_cnt + beidou_sv_cnt ) >= 5 ) ) )
+                ( ( gps_sv_cnt >= 5 ) || ( beidou_sv_cnt >= 5 ) ) )
             {
                 is_valid_nav_message = true;
             }
@@ -467,27 +454,28 @@ bool smtc_gnss_is_nav_message_valid( const lr11xx_gnss_constellation_mask_t cons
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
  */
 
-static bool gnss_scan( const void* ral_context, lr11xx_gnss_date_t date, bool assisted,
+static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, bool assisted,
                        lr11xx_gnss_constellation_mask_t constellations )
 {
     lr11xx_status_t status = LR11XX_STATUS_ERROR;
     uint8_t         scan_input_parameters;
 
-    status = lr11xx_system_set_dio_irq_params( ral_context, LR11XX_SYSTEM_IRQ_GNSS_SCAN_DONE, LR11XX_SYSTEM_IRQ_NONE );
+    status =
+        lr11xx_system_set_dio_irq_params( radio_context, LR11XX_SYSTEM_IRQ_GNSS_SCAN_DONE, LR11XX_SYSTEM_IRQ_NONE );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set GNSS scan done IRQ params\n" );
         return false;
     }
 
-    status = lr11xx_gnss_set_scan_mode( ral_context, LR11XX_GNSS_SCAN_MODE_3_SINGLE_SCAN_AND_5_FAST_SCANS );
+    status = lr11xx_gnss_set_scan_mode( radio_context, LR11XX_GNSS_SCAN_MODE_3_SINGLE_SCAN_AND_5_FAST_SCANS );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set GNSS scan mode\n" );
         return false;
     }
 
-    status = lr11xx_gnss_set_constellations_to_use( ral_context, constellations );
+    status = lr11xx_gnss_set_constellations_to_use( radio_context, constellations );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set constellations\n" );
@@ -497,15 +485,15 @@ static bool gnss_scan( const void* ral_context, lr11xx_gnss_date_t date, bool as
     if( assisted == true )
     {
         scan_input_parameters = 0; /* no doppler, no bit change */
-        status = lr11xx_gnss_scan_assisted( ral_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT, scan_input_parameters,
-                                            GNSS_MAX_NB_SAT );
+        status = lr11xx_gnss_scan_assisted( radio_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT, scan_input_parameters,
+                                            GNSS_NB_SVS_MAX );
     }
     else
     {
         scan_input_parameters = LR11XX_GNSS_RESULTS_DOPPLER_MASK +
                                 LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 14 dopplers max, no bit change */
-        status = lr11xx_gnss_scan_autonomous( ral_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT, scan_input_parameters,
-                                              GNSS_MAX_NB_SAT );
+        status = lr11xx_gnss_scan_autonomous( radio_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT,
+                                              scan_input_parameters, GNSS_NB_SVS_MAX );
     }
     if( status != LR11XX_STATUS_OK )
     {

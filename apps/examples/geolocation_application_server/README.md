@@ -17,9 +17,8 @@ Instead of importing the End Nodes Demo flow, import the files *modem.json* and 
 The web page also indicates how to [configure the flow](https://lora-developers.semtech.com/build/software/lora-basics/lora-basics-for-end-nodes/developer-walk-through/?url=application_server.html#configure-the-flow) concerning the MQTT connections with LoRaWAN Network Servers and LoRa Cloud.
 Follow the same procedure but for the flow distributed in this folder.
 
-This application server needs to use both *LoRa Cloud Geolocation* and *LoRa Cloud Device & Application Services*.
-Obtaining both *LoRa Cloud Device & Application Services* token and URL is explained in the web page here-before.
-The *LoRa Cloud Geolocation* token and URL are also available on the LoRa Cloud account, but in *LoRa Cloud Geolocation* section instead of *LoRa Cloud Device & Application Services*.
+This application server needs to use *LoRa Cloud Modem & Geolocation Services*.
+Obtaining both *LoRa Cloud Modem & Geolocation Services* token and URL is explained in the web page here-before.
 
 ### Maps
 
@@ -43,12 +42,12 @@ If this is the case, the flows corresponding to the examples from *semtech-wsp-a
 
 Once deployed, the Application Server runs alone and does not need intervention. When the LoRa Network Server it is connected to receives an uplink, the Application Server receives a MQTT message.
 
-This reception of the MQTT message triggers a http request to the *LoRa Cloud Device & Application Services*. The *LoRa Cloud Device & Application Services* may respond with a downlink request that is propagate automatically by the Application Server to the LoRaWAN Network Server.
+This reception of the MQTT message triggers a http request to the *LoRa Cloud Modem & Geolocation Services*. The *LoRa Cloud Modem & Geolocation Services* may respond with a downlink request that is propagated automatically by the Application Server to the LoRaWAN Network Server.
 
-The reception of the MQTT message also executes the Geolocation flow. If LoRaWAN port of the uplink corresponds to the geolocation application port (195) then the payload is interpreted as a geolocation result:
+The reception of the MQTT message also executes the Geolocation flow. If LoRaWAN port of the uplink corresponds to the geolocation application port (194 or 196) then the payload is interpreted as a geolocation scan result:
 
-- Wi-Fi result; or
-- GNSS result; or
+- on port 196: Wi-Fi scan result; or
+- on port 194: GNSS scan result; or
 - unknown result.
 
 If the payload cannot be interpreted as Wi-Fi result of GNSS result, it is discarded.
@@ -57,25 +56,25 @@ If the payload is interpreted successfully as a Wi-Fi or GNSS result, then these
 
 ### Wi-Fi result
 
-If the geolocation payload corresponds to a Wi-Fi result, then the *LoRa Cloud Device & Application Services* is contacted to solve the location of the device based on these Wi-Fi result. If the *LoRa Cloud Device & Application Services* responds with a valid location, then this location is displayed on the `/worldmap_wifi` map.
+If the geolocation payload corresponds to a Wi-Fi result, then the *LoRa Cloud Modem & Geolocation Services* is contacted to solve the location of the device based on these Wi-Fi result. If the *LoRa Cloud Modem & Geolocation Services* responds with a valid location, then this location is displayed on the `/worldmap_wifi` map.
 
 When clicking on each location points, the MAC addresses scanned are provided.
 
 ### GNSS result
 
-Every GNSS payload reception triggers the three following pipelines:
+Every GNSS payload reception triggers the two following pipelines:
 
 - execution of a Single frame solving; and
 - appending to the grouping queue.
 
-The GNSS single frame solving is executed by a call to the *LoRa Cloud Device & Application Services*. If the solve is successful, then the location is displayed on the map `/worldmap_gnss_single`.
+The GNSS single frame solving is executed by a call to the *LoRa Cloud Modem & Geolocation Services*. If the solve is successful, then the location is displayed on the map `/worldmap_gnss_single`.
 
-The grouping queue allows to store together scans that belongs to the same scan group (refer to readme of the GNSS geolocation demo for details). When a GNSS payload frame is appending to the grouping queue, the Application Server determine if it belongs to the same scan group as the GNSS payload already present in the queue.
+The grouping queue allows to store together scans that belongs to the same scan group (refer to readme of the GNSS geolocation demo for details). When a GNSS payload frame is appended to the grouping queue, the Application Server determines if it belongs to the same scan group as the GNSS payload already present in the queue.
 
 If the new GNSS payload is from a scan group different from the payload already in the queue, then the following is executed:
 
 1. a multi frame solving with the content of the grouping queue;
-1. flush of the grouping queue; and
+1. flushing of the grouping queue; and
 1. appending of the new GNSS payload.
 
 In case of successful solve, the result is displayed on the map `/worldmap_gnss_multiframe_grouping`.

@@ -306,12 +306,12 @@ void apps_modem_event_process( void )
             }
             else
             {
-                HAL_DBG_TRACE_ERROR( "lora_basics_modem_event_callback not defined %u\n", current_event.event_type );
+                HAL_DBG_TRACE_ERROR( "lora_basics_modem_event_callback not defined\n" );
             }
         }
         else
         {
-            HAL_DBG_TRACE_ERROR( "smtc_modem_get_event != SMTC_MODEM_RC_OK\n", current_event.event_type );
+            HAL_DBG_TRACE_ERROR( "smtc_modem_get_event != SMTC_MODEM_RC_OK\n" );
         }
     } while( ( return_code == SMTC_MODEM_RC_OK ) && ( current_event.event_type != SMTC_MODEM_EVENT_NONE ) );
 }

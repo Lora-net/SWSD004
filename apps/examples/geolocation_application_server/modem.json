@@ -68,23 +68,6 @@
         "wires": []
     },
     {
-        "id": "c68c4106.48a85",
-        "type": "loracloud-utils-connectors-actility-in",
-        "z": "348ffbdd.1c23a4",
-        "name": "",
-        "port": "199",
-        "x": 570,
-        "y": 480,
-        "wires": [
-            [
-                "eb8810a.3bed6f"
-            ],
-            [
-                "7f658510.708dec"
-            ]
-        ]
-    },
-    {
         "id": "4ce62231.050b74",
         "type": "comment",
         "z": "348ffbdd.1c23a4",
@@ -93,92 +76,6 @@
         "x": 700,
         "y": 420,
         "wires": []
-    },
-    {
-        "id": "fea45fd0.23db18",
-        "type": "inject",
-        "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Device & Application Services url",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "",
-        "topic": "",
-        "payload": "",
-        "payloadType": "str",
-        "x": 420,
-        "y": 200,
-        "wires": [
-            [
-                "3c1dc46.40cd4bc"
-            ]
-        ]
-    },
-    {
-        "id": "3c1dc46.40cd4bc",
-        "type": "function",
-        "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Device & Application Services url",
-        "func": "global.set('das_url', msg.payload);",
-        "outputs": 1,
-        "noerr": 0,
-        "x": 800,
-        "y": 200,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "1fe8c63a.22079a",
-        "type": "inject",
-        "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Device & Application Services server token",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "",
-        "topic": "",
-        "payload": "",
-        "payloadType": "str",
-        "x": 390,
-        "y": 160,
-        "wires": [
-            [
-                "775ee1aa.1346f"
-            ]
-        ]
-    },
-    {
-        "id": "775ee1aa.1346f",
-        "type": "function",
-        "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Device & Application Services server token",
-        "func": "global.set('das_token', msg.payload);",
-        "outputs": 1,
-        "noerr": 0,
-        "x": 830,
-        "y": 160,
-        "wires": [
-            []
-        ]
     },
     {
         "id": "f9439f8b.fc42b8",
@@ -276,23 +173,6 @@
         "wires": []
     },
     {
-        "id": "5e123e9e.b8c12",
-        "type": "mqtt in",
-        "z": "348ffbdd.1c23a4",
-        "name": "Actility",
-        "topic": "TPX/+/+/UL",
-        "qos": "2",
-        "datatype": "auto",
-        "broker": "",
-        "x": 330,
-        "y": 480,
-        "wires": [
-            [
-                "c68c4106.48a85"
-            ]
-        ]
-    },
-    {
         "id": "5440c72.95d3438",
         "type": "inject",
         "z": "348ffbdd.1c23a4",
@@ -317,7 +197,7 @@
         "type": "function",
         "z": "348ffbdd.1c23a4",
         "name": "/api/v1/device/info",
-        "func": "var api = 'api/v1/device/info';\nmsg.method = 'post';\n\nmsg.url = `${global.get('das_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('das_token')};\n\nmsg.payload = {\n   'deveuis':  global.get('deveuis'),\n}\n\nreturn msg;",
+        "func": "var api = 'api/v1/device/info';\nmsg.method = 'post';\n\nmsg.url = `${global.get('mgs_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('mgs_token')};\n\nmsg.payload = {\n   'deveuis':  global.get('deveuis'),\n}\n\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "x": 690,
@@ -415,7 +295,7 @@
         "type": "function",
         "z": "348ffbdd.1c23a4",
         "name": "/api/v1/requests/set",
-        "func": "var api = 'api/v1/requests/set';\nmsg.method = 'post';\n\nmsg.url = `${global.get('das_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('das_token')};\n\nmsg.payload = {\n   'deveuis':  global.get('deveuis'),\n   'requests': msg.payload,\n   'upcount': 1,\n   'updelay': 20,\n};\n\nreturn msg;",
+        "func": "var api = 'api/v1/requests/set';\nmsg.method = 'post';\n\nmsg.url = `${global.get('mgs_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('mgs_token')};\n\nmsg.payload = {\n   'deveuis':  global.get('deveuis'),\n   'requests': msg.payload,\n   'upcount': 1,\n   'updelay': 20,\n};\n\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "x": 700,
@@ -535,8 +415,7 @@
         "z": "348ffbdd.1c23a4",
         "name": "",
         "links": [
-            "184c96a.c70ca69",
-            "6373b4e9.65af34"
+            "184c96a.c70ca69"
         ],
         "x": 675,
         "y": 640,
@@ -549,8 +428,7 @@
         "name": "To LoRa Cloud Device & Application Services - Joining",
         "links": [
             "4dce8eaf.09cc38",
-            "7892faaf.208c44",
-            "7f658510.708dec"
+            "7892faaf.208c44"
         ],
         "x": 295,
         "y": 1100,
@@ -565,7 +443,7 @@
         "type": "function",
         "z": "348ffbdd.1c23a4",
         "name": "Set url and credentials",
-        "func": "var api = 'api/v1/device/send';\nmsg.method = 'post';\n\nmsg.url = `${global.get('das_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('das_token')};\n\n\nreturn msg;",
+        "func": "var api = 'api/v1/device/send';\nmsg.method = 'post';\n\nmsg.url = `${global.get('mgs_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('mgs_token')};\n\n\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
@@ -696,7 +574,7 @@
         "topic": "",
         "payload": "[\"00-00-00-00-00-00-00-00\"]",
         "payloadType": "json",
-        "x": 540,
+        "x": 580,
         "y": 320,
         "wires": [
             [
@@ -712,7 +590,7 @@
         "func": "global.set('deveuis', msg.payload);",
         "outputs": 1,
         "noerr": 0,
-        "x": 690,
+        "x": 730,
         "y": 320,
         "wires": [
             []
@@ -755,7 +633,7 @@
         "type": "function",
         "z": "348ffbdd.1c23a4",
         "name": "/api/v1/requests/clear",
-        "func": "var api = 'api/v1/requests/clear';\nmsg.method = 'post';\n\nmsg.url = `${global.get('das_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('das_token')};\n\nmsg.payload = {\n   'deveuis':  global.get('deveuis'),\n}\n\nreturn msg;",
+        "func": "var api = 'api/v1/requests/clear';\nmsg.method = 'post';\n\nmsg.url = `${global.get('mgs_url')}/${api}`;\nmsg.headers = {'Authorization': global.get('mgs_token')};\n\nmsg.payload = {\n   'deveuis':  global.get('deveuis'),\n}\n\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "x": 700,
@@ -870,19 +748,6 @@
         "wires": []
     },
     {
-        "id": "7f658510.708dec",
-        "type": "link out",
-        "z": "348ffbdd.1c23a4",
-        "name": "",
-        "links": [
-            "184c96a.c70ca69",
-            "6373b4e9.65af34"
-        ],
-        "x": 675,
-        "y": 520,
-        "wires": []
-    },
-    {
         "id": "9def56e2.ac2f4",
         "type": "link out",
         "z": "348ffbdd.1c23a4",
@@ -896,7 +761,7 @@
     },
     {
         "id": "95f885b1.0f631",
-        "type": "loracloud-utils-connectors-das-parser",
+        "type": "loracloud-utils-connectors-mgs-parser",
         "z": "348ffbdd.1c23a4",
         "name": "",
         "x": 470,
@@ -1248,7 +1113,7 @@
         "id": "98186df7.c883e8",
         "type": "inject",
         "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Geolocation url",
+        "name": "Modem & Geolocation Services url",
         "props": [
             {
                 "p": "payload"
@@ -1265,7 +1130,7 @@
         "topic": "",
         "payload": "",
         "payloadType": "str",
-        "x": 480,
+        "x": 500,
         "y": 280,
         "wires": [
             [
@@ -1277,13 +1142,13 @@
         "id": "83e37e26.bc9148",
         "type": "function",
         "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Geolocation url",
-        "func": "global.set('gls_url', msg.payload);",
+        "name": "Modem & Geolocation Services url",
+        "func": "global.set('mgs_url', msg.payload);",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
-        "x": 740,
+        "x": 800,
         "y": 280,
         "wires": [
             []
@@ -1293,7 +1158,7 @@
         "id": "e53839c7.d2746",
         "type": "inject",
         "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Geolocation token",
+        "name": "Modem & Geolocation Services server token",
         "props": [
             {
                 "p": "payload"
@@ -1322,13 +1187,13 @@
         "id": "7d232e05.2c821",
         "type": "function",
         "z": "348ffbdd.1c23a4",
-        "name": "LoRa Cloud Geolocation server token",
-        "func": "global.set('gls_token', msg.payload);",
+        "name": "Modem & Geolocation Services server token",
+        "func": "global.set('mgs_token', msg.payload);",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
-        "x": 770,
+        "x": 830,
         "y": 240,
         "wires": [
             []

@@ -21,6 +21,7 @@ stages:
     OPT: ""
     REGION: ""
     RP: ""
+    MCU_FLAGS: "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard"
 
   before_script:
     - git submodule sync --recursive
@@ -28,7 +29,7 @@ stages:
 
   script:
     - arm-none-eabi-gcc --version
-    - make basic_modem_$TARGET MODEM_TRACE=$TRACE CRYPTO=$CRYPTO $REGION RP_VERSION=$RP VERBOSE=yes
+    - make basic_modem_$TARGET MODEM_TRACE=$TRACE CRYPTO=$CRYPTO $REGION RP_VERSION=$RP MCU_FLAGS="$MCU_FLAGS" VERBOSE=yes
 
 #-- SX1261 jobs --------------------------------------------------------------
 job-build-sx1261-rp2-1-0-1:
@@ -51,6 +52,19 @@ job-build-sx1262-rp2-1-0-1:
     RP: "RP2_101"
 
 job-build-sx1262-rp2-1-0-3:
+  extends: .build
+  variables:
+    TARGET: "sx1262"
+    RP: "RP2_103"
+
+#-- SX1268 jobs --------------------------------------------------------------
+job-build-sx1268-rp2-1-0-1:
+  extends: .build
+  variables:
+    TARGET: "sx1262"
+    RP: "RP2_101"
+
+job-build-sx1268-rp2-1-0-3:
   extends: .build
   variables:
     TARGET: "sx1262"

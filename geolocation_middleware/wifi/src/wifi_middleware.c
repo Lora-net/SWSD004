@@ -117,6 +117,10 @@
  */
 #define WIFI_AP_RSSI_SIZE ( 1 )
 
+/**
+ * @brief The LoRa Basics Modem extended uplink ID to be used for Wi-Fi uplinks (TASK_EXTENDED_2)
+ */
+#define SMTC_MODEM_EXTENDED_UPLINK_ID_WIFI ( 2 )
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE TYPES -----------------------------------------------------------
@@ -175,8 +179,9 @@ static bool task_cancelled_by_user = false;
 
 /*!
  * @brief The scan sequence has started
- * @brief Set to true when the first scan of the sequence actually started (radio)
- * @brief Set back to false when the complete sequence is terminated (all results sent)
+ *
+ * Set to true when the first scan of the sequence actually started (radio)
+ * Set back to false when the complete sequence is terminated (all results sent)
  */
 static bool task_running = false;
 
@@ -235,7 +240,7 @@ static void wifi_mw_reset_results( void );
 static void wifi_mw_tx_done_callback( void );
 
 /*!
- * @brief Request an uplink to LBM through the extended API (no buffer copy)
+ * @brief Send an uplink request to LBM through the extended API (no buffer copy)
  *
  * @param [in] tx_frame_buffer A pointer to the buffer payload to be sent over the air.
  * @param [in] tx_frame_buffer_size The size of the buffer to be sent.
@@ -291,9 +296,9 @@ mw_return_code_t wifi_mw_init( ralf_t* modem_radio, uint8_t stack_id )
 mw_return_code_t wifi_mw_scan_start( uint32_t start_delay )
 {
     smtc_modem_return_code_t modem_rc;
-    smtc_modem_rp_task_t     rp_task;
+    smtc_modem_rp_task_t     rp_task = { 0 };
     uint32_t                 time_ms;
-    wifi_settings_t          wifi_settings;
+    wifi_settings_t          wifi_settings = { 0 };
 
     if( task_running == true )
     {
@@ -307,13 +312,16 @@ mw_return_code_t wifi_mw_scan_start( uint32_t start_delay )
     /* Reset pending events */
     pending_events = 0;
 
+    /* Reset any pending cancel request which has not been completed (error case) */
+    task_cancelled_by_user = false;
+
     /* Init settings */
-    wifi_settings.channels            = 0x3FFF;
+    wifi_settings.channels            = 0x3FFF; /* all channels enabled */
     wifi_settings.types               = LR11XX_WIFI_TYPE_SCAN_B_G_N;
     wifi_settings.max_results         = WIFI_MAX_RESULTS;
     wifi_settings.timeout_per_channel = WIFI_TIMEOUT_PER_CHANNEL_DEFAULT;
     wifi_settings.timeout_per_scan    = WIFI_TIMEOUT_PER_SCAN_DEFAULT;
-    smtc_wifi_settings_init( wifi_settings );
+    smtc_wifi_settings_init( &wifi_settings );
 
     /* Prepare the task for next scan, add 300ms to avoid schedule a task in the past */
     time_ms = smtc_modem_hal_get_time_in_ms( ) + 300;
@@ -398,7 +406,7 @@ mw_return_code_t wifi_mw_get_event_data_scan_done( wifi_mw_event_data_scan_done_
             data->results[i].rssi    = wifi_results.results[i].rssi;
             data->results[i].channel = wifi_results.results[i].channel;
             data->results[i].type    = wifi_results.results[i].type;
-            memcpy( data->results[i].mac_address, wifi_results.results[i].mac_address, 6 );
+            memcpy( data->results[i].mac_address, wifi_results.results[i].mac_address, WIFI_AP_ADDRESS_SIZE );
         }
 
         return MW_RC_OK;
@@ -422,24 +430,27 @@ void wifi_mw_send_bypass( bool no_send )
 
 void wifi_mw_set_payload_format( wifi_mw_payload_format_t format ) { payload_format = format; }
 
-void wifi_mw_display_results( wifi_mw_event_data_scan_done_t data )
+void wifi_mw_display_results( const wifi_mw_event_data_scan_done_t* data )
 {
-    MW_DBG_TRACE_PRINTF( "SCAN_DONE info:\n" );
-    MW_DBG_TRACE_PRINTF( "-- number of results: %u\n", data.nbr_results );
-    MW_DBG_TRACE_PRINTF( "-- power consumption: %u uah\n", data.power_consumption_uah );
-    MW_DBG_TRACE_PRINTF( "-- Timestamp: %u\n", data.timestamp );
-
-    for( uint8_t i = 0; i < data.nbr_results; i++ )
+    if( data != NULL )
     {
-        for( uint8_t j = 0; j < 6; j++ )
+        MW_DBG_TRACE_PRINTF( "SCAN_DONE info:\n" );
+        MW_DBG_TRACE_PRINTF( "-- number of results: %u\n", data->nbr_results );
+        MW_DBG_TRACE_PRINTF( "-- power consumption: %u uah\n", data->power_consumption_uah );
+        MW_DBG_TRACE_PRINTF( "-- Timestamp: %u\n", data->timestamp );
+
+        for( uint8_t i = 0; i < data->nbr_results; i++ )
         {
-            MW_DBG_TRACE_PRINTF( "%02X ", data.results[i].mac_address[j] );
+            for( uint8_t j = 0; j < WIFI_AP_ADDRESS_SIZE; j++ )
+            {
+                MW_DBG_TRACE_PRINTF( "%02X ", data->results[i].mac_address[j] );
+            }
+            MW_DBG_TRACE_PRINTF( " -- Channel: %d", data->results[i].channel );
+            MW_DBG_TRACE_PRINTF( " -- Type: %d", data->results[i].type );
+            MW_DBG_TRACE_PRINTF( " -- RSSI: %d\n", data->results[i].rssi );
         }
-        MW_DBG_TRACE_PRINTF( " -- Channel: %d", data.results[i].channel );
-        MW_DBG_TRACE_PRINTF( " -- Type: %d", data.results[i].type );
-        MW_DBG_TRACE_PRINTF( " -- RSSI: %d\n", data.results[i].rssi );
+        MW_DBG_TRACE_PRINTF( "\n" );
     }
-    MW_DBG_TRACE_PRINTF( "\n" );
 }
 
 mw_return_code_t wifi_mw_get_event_data_terminated( wifi_mw_event_data_terminated_t* data )
@@ -455,12 +466,12 @@ mw_return_code_t wifi_mw_get_event_data_terminated( wifi_mw_event_data_terminate
         /* Result are sent only if enough results */
         if( send_bypass == false )
         {
-            data->nb_scan_sent = ( wifi_results.nbr_results >= WIFI_SCAN_NB_AP_MIN ) ? 1 : 0;
+            data->nb_scans_sent = ( wifi_results.nbr_results >= WIFI_SCAN_NB_AP_MIN ) ? 1 : 0;
         }
         else
         {
             /* assume that the "no send" mode was configured before starting the scan, so no packet sent */
-            data->nb_scan_sent = 0;
+            data->nb_scans_sent = 0;
         }
 
         return MW_RC_OK;
@@ -558,27 +569,40 @@ void wifi_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     }
     else if( irq_status == SMTC_RP_RADIO_WIFI_SCAN_DONE )
     {
+        bool scan_results_rc;
+
+        memset( &wifi_results, 0, sizeof wifi_results );
+
         /* Timestamp this scan */
         wifi_results.timestamp = mw_get_gps_time( );
 
         /* Wi-Fi scan completed, get and display the results */
-        smtc_wifi_get_results( modem_radio_ctx->ral.context, &wifi_results );
+        scan_results_rc = smtc_wifi_get_results( modem_radio_ctx->ral.context, &wifi_results );
 
         /* Get scan power consumption */
         smtc_wifi_get_power_consumption( modem_radio_ctx->ral.context, &wifi_results.power_consumption_uah );
 
-        /* Scan has been completed, send an event to application */
-        wifi_mw_send_event( WIFI_MW_EVENT_SCAN_DONE );
-
-        /* Send scan uplink if any, or send event to application */
-        if( wifi_mw_send_results( ) == false )
+        if( scan_results_rc == true )
         {
-            /* No more scan result to be sent, or failed to send packet */
-            WIFI_MW_TIME_CRITICAL_TRACE_PRINTF( "RP_TASK_WIFI: no scan result to be sent\n" );
+            /* Scan has been completed, send an event to application */
+            wifi_mw_send_event( WIFI_MW_EVENT_SCAN_DONE );
 
-            /* Send an event to application to notify for completion */
-            /* The application needs to know that it can proceed with the next scan */
-            wifi_mw_send_event( WIFI_MW_EVENT_TERMINATED );
+            /* Send scan uplink if any, or send event to application */
+            if( wifi_mw_send_results( ) == false )
+            {
+                /* No more scan result to be sent, or failed to send packet */
+                WIFI_MW_TIME_CRITICAL_TRACE_PRINTF( "RP_TASK_WIFI: no scan result to be sent\n" );
+
+                /* Send an event to application to notify for completion */
+                /* The application needs to know that it can proceed with the next scan */
+                wifi_mw_send_event( WIFI_MW_EVENT_TERMINATED );
+            }
+        }
+        else
+        {
+            MW_DBG_TRACE_ERROR( "RP_TASK_WIFI - unkown error on get results\n" );
+            /* Send an event to application to notify for error */
+            wifi_mw_send_event( WIFI_MW_EVENT_ERROR_UNKNOWN );
         }
     }
     else
@@ -597,7 +621,7 @@ void wifi_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     }
 
     /* Set the radio back to sleep */
-    lr11xx_set_sleep( modem_radio_ctx->ral.context );
+    mw_radio_set_sleep( modem_radio_ctx->ral.context );
 }
 
 /*!
@@ -645,19 +669,7 @@ static bool wifi_mw_send_results( void )
     return true;
 }
 
-static void wifi_mw_reset_results( void )
-{
-    for( uint8_t i = 0; i < wifi_results.nbr_results; i++ )
-    {
-        wifi_results.results[i].rssi    = 0;
-        wifi_results.results[i].channel = 0;
-        wifi_results.results[i].type    = 0;
-        memset( wifi_results.results[i].mac_address, 0, WIFI_AP_ADDRESS_SIZE );
-    }
-    wifi_results.timestamp             = 0;
-    wifi_results.nbr_results           = 0;
-    wifi_results.power_consumption_uah = 0;
-}
+static void wifi_mw_reset_results( void ) { memset( &wifi_results, 0, sizeof wifi_results ); }
 
 static void wifi_mw_tx_done_callback( void )
 {
@@ -695,8 +707,9 @@ static bool wifi_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx
     }
 
     /* Send uplink */
-    modem_response_code = smtc_modem_request_extended_uplink( modem_stack_id, lorawan_port, false, tx_frame_buffer,
-                                                              tx_frame_buffer_size, 2, &wifi_mw_tx_done_callback );
+    modem_response_code =
+        smtc_modem_request_extended_uplink( modem_stack_id, lorawan_port, false, tx_frame_buffer, tx_frame_buffer_size,
+                                            SMTC_MODEM_EXTENDED_UPLINK_ID_WIFI, &wifi_mw_tx_done_callback );
     if( modem_response_code == SMTC_MODEM_RC_OK )
     {
         MW_DBG_TRACE_INFO( "Request uplink:\n" );

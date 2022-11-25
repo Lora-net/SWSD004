@@ -28,7 +28,7 @@ LR11XX FW : 0x0307
 
 INFO: ###### ===== LoRa Basics Modem Tracker application ==== ######
 
-APP VERSION : 2.0.4
+APP VERSION : 2.1.1
 
 INFO: ###### ===== LoRa Basics Modem Version ==== ######
 INFO: LoRaWAN version: 01.00.04.01
@@ -143,9 +143,6 @@ LoRa Edge Config app V2 allows user to convert a Modem-E to a LoRa Basics Modem
 
 ![Modem-E to LBM Migration](doc/img/migration.png)
 
-:exclamation: ONLY EU_868 AND US_915 REGIONS ARE SUPPORTED, CONVERSION FROM TRACKERS CONFIGURED IN OTHER REGIONS IS NOT SUPPORTED  !
-| ---------------------------------------------------------------------------------------------------------------------------------|
-
 ### Tracker configuration
 
 The application can be configured using 'LoRa Edge™ Config' Android and iOS App running on a compatible smartphone. Communication between the smartphone and the Tracker application uses the Bluetooth Low Energy (BLE) wireless technology. The Tracker application starts advertising at startup and then whenever it detects the presence of a magnet. It stops advertising after 30 seconds when not paired. The timeout value is configured by the `TRACKER_ADV_TIMEOUT_MS` constant.
@@ -196,6 +193,15 @@ Supported values for `LORAWAN_REGION`:
 
 * `SMTC_MODEM_REGION_EU_868 (default)`
 * `SMTC_MODEM_REGION_US_915`
+* `SMTC_MODEM_REGION_AS_923_GRP1`
+* `SMTC_MODEM_REGION_AU_915`
+* `SMTC_MODEM_REGION_CN_470`
+* `SMTC_MODEM_REGION_AS_923_GRP2`
+* `SMTC_MODEM_REGION_AS_923_GRP3`
+* `SMTC_MODEM_REGION_IN_865`
+* `SMTC_MODEM_REGION_KR_920`
+* `SMTC_MODEM_REGION_RU_864`
+* `SMTC_MODEM_REGION_CN_470_RP_1_0`
 
 Supported values for `LORAWAN_CLASS`:
 
@@ -323,13 +329,6 @@ please refer to this [Geolocation middleware documentation](<../../../geolocatio
 
 The actual datarate and number of retransmission values are defined in the
 `main_tracker_application.c` file.
-
-| Constant                | Comments                                                 |
-| ----------------------- | -------------------------------------------------------- |
-| `CUSTOM_NB_TRANS_EU868` | The number of retransmission to be used for EU868 region |
-| `ADR_CUSTOM_LIST_EU868` | The custom ADR list to be used for EU868 region          |
-| `CUSTOM_NB_TRANS_US915` | The number of retransmission to be used for US915 region |
-| `ADR_CUSTOM_LIST_US915` | The custom ADR list to be used for US915 region          |
 
 The values must be carefully set to match with duty cycle constraints, power
 consumption targets etc...

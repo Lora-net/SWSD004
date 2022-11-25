@@ -47,12 +47,11 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "lr11xx_wifi.h"
-
-#include "wifi_helpers.h"
-
 #include "ralf.h"
+
 #include "mw_common.h"
+
+#include "wifi_helpers_defs.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -70,14 +69,14 @@ extern "C" {
  */
 
 /**
- * @brief Wi-Fi event status sent from the middleware to the application.
+ * @brief Wi-Fi event status sent from the middleware to the application
  */
 typedef enum wifi_mw_event_mask_e
 {
-    WIFI_MW_EVENT_SCAN_CANCELLED = 0,  //!< The scan operation has been cancelled
-    WIFI_MW_EVENT_SCAN_DONE      = 1,  //!< The scan operation has been completed
-    WIFI_MW_EVENT_TERMINATED     = 2,  //!< The scan & send sequence has been completed
-    WIFI_MW_EVENT_ERROR_UNKNOWN  = 3,  //!< The scan operation has failed for an unknown reason
+    WIFI_MW_EVENT_SCAN_CANCELLED = 0,  //!< Scan operation has been cancelled
+    WIFI_MW_EVENT_SCAN_DONE      = 1,  //!< Scan operation has been completed
+    WIFI_MW_EVENT_TERMINATED     = 2,  //!< Scan & send sequence has been completed
+    WIFI_MW_EVENT_ERROR_UNKNOWN  = 3,  //!< Scan operation has failed for an unknown reason
     /* 8 event types max */
 } wifi_mw_event_type_t;
 
@@ -91,16 +90,16 @@ typedef enum wifi_mw_payload_format_e
 } wifi_mw_payload_format_t;
 
 /**
- * @brief The data that can be retrieved when a WIFI_MW_EVENT_SCAN_DONE event occurs.
+ * @brief The data that can be retrieved when a WIFI_MW_EVENT_SCAN_DONE event occurs
  */
 typedef wifi_scan_all_result_t wifi_mw_event_data_scan_done_t;
 
 /**
- * @brief The data that can be retrieved when a GNSS_MW_EVENT_TERMINATED event occurs.
+ * @brief The data that can be retrieved when a WIFI_MW_EVENT_TERMINATED event occurs.
  */
 typedef struct
 {
-    uint8_t nb_scan_sent;
+    uint8_t nb_scans_sent;  //!< Number of scans that have been sent over the air
 } wifi_mw_event_data_terminated_t;
 
 /*
@@ -110,88 +109,93 @@ typedef struct
 /**
  * @brief Get version of the Wi-Fi middleware
  *
- * @param [out] version The middleware version
+ * @param [out] version Middleware version
  *
  * @return Middleware return code as defined in @ref mw_return_code_t
  * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_FAILED     version is not initialized.
+ * @retval MW_RC_FAILED     version is not initialized
  */
 mw_return_code_t wifi_mw_get_version( mw_version_t* version );
 
 /**
- * @brief Initialize the Wi-Fi middleware
+ * @brief Initialize the Wi-Fi middleware context
+ * Must be called only once at startup, before any other call to the middleware.
  *
- * @param [in] modem_radio The interface the modem and middleware have to use to access the radio
- * @param [in] stack_id The modem stack ID
+ * @param [in] modem_radio Interface to access the radio
+ * @param [in] stack_id Modem stack ID
  *
  * @return Middleware return code as defined in @ref mw_return_code_t
  * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_FAILED     The modem/radio interface is not initialized.
+ * @retval MW_RC_FAILED     The modem/radio interface is not initialized
  */
 mw_return_code_t wifi_mw_init( ralf_t* modem_radio, uint8_t stack_id );
 
 /**
- * @brief Program a Wi-Fi scan & send sequence to start in a given delay.
+ * @brief Program a Wi-Fi scan & send sequence to start in a given delay
  *
- * @param [in] start_delay The delay in seconds befire starting the scan sequence.
+ * @param [in] start_delay Delay in seconds before starting the scan sequence
  *
  * @return Middleware return code as defined in @ref mw_return_code_t
  * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_BUSY       A scan sequence is already on-going.
- * @retval MW_RC_FAILED     An error occurred while starting the scanning sequence.
+ * @retval MW_RC_BUSY       A scan sequence is already on-going
+ * @retval MW_RC_FAILED     An error occurred while starting the scanning sequence
  */
 mw_return_code_t wifi_mw_scan_start( uint32_t start_delay );
 
 /**
- * @brief Cancell the currently programmed Wi-Fi scan & send sequence (if not actually started).
+ * @brief Cancel the currently programmed Wi-Fi scan & send sequence (if not actually started)
  *
  * @return Middleware return code as defined in @ref mw_return_code_t
  * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_BUSY       The scan sequence has already started (cannot be cancelled).
+ * @retval MW_RC_BUSY       The scan sequence has already started (cannot be cancelled)
  */
 mw_return_code_t wifi_mw_scan_cancel( void );
 
 /**
- * @brief Check if there is a particular event in the "pending events" bitfield.
+ * @brief Check if there is a particular event in the "pending events" bitfield
  *
- * @param [in] pending_events The pending events bitfield given when an event occurs.
- * @param [in] event The particular event to search in the pending events bitfield.
+ * @param [in] pending_events Pending events bitfield given when an event occurs
+ * @param [in] event Event to search in the pending events bitfield
  *
- * @return a boolean to indicate if the given event is set in the pending events bitfield.
+ * @return a boolean to indicate if the given event is set in the pending events bitfield
  */
 bool wifi_mw_has_event( uint8_t pending_events, wifi_mw_event_type_t event );
 
 /**
- * @brief Retrieve the data associated with the WIFI_MW_EVENT_SCAN_DONE event.
+ * @brief Retrieve the data associated with the WIFI_MW_EVENT_SCAN_DONE event
  *
- * @param [out] data A description of the scan group results.
+ * @param [out] data Description of the scan group results
  *
  * @return Middleware return code as defined in @ref mw_return_code_t
  * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_FAILED     If the given pointer is NULL or if there is no SCAN_DONE event pending.
+ * @retval MW_RC_FAILED     If the given pointer is NULL or if there is no SCAN_DONE event pending
  */
 mw_return_code_t wifi_mw_get_event_data_scan_done( wifi_mw_event_data_scan_done_t* data );
 
 /**
- * @brief Retrieve the data associated with the WIFI_MW_EVENT_TERMINATED event.
+ * @brief Retrieve the data associated with the WIFI_MW_EVENT_TERMINATED event
  *
- * @param [out] data The status of the end of the scan & send sequence.
+ * @param [out] data Status of the end of the scan & send sequence
  *
  * @return Middleware return code as defined in @ref mw_return_code_t
  * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_FAILED     If the given pointer is NULL or if there is no TERMINATED event pending.
+ * @retval MW_RC_FAILED     If the given pointer is NULL or if there is no TERMINATED event pending
  */
 mw_return_code_t wifi_mw_get_event_data_terminated( wifi_mw_event_data_terminated_t* data );
 
 /**
- * @brief Indicates to the middleware that all pending events have been handled and can be cleared.
+ * @brief Indicates to the middleware that all pending events have been handled and can be cleared
+ *
+ * Needs to be called when pending events have been processed, to avoid multiple notification of the same event.
  */
 void wifi_mw_clear_pending_events( void );
 
 /**
- * @brief The LoRaWAN port on which to send the scan results uplinks.
+ * @brief Set the LoRaWAN port on which to send the scan results uplinks
  *
- * By default it is set to 196 (WIFI_APP_PORT).
+ * @param [in] port LoRaWAN port
+ *
+ * By default it is set to 196 (WIFI_APP_PORT)
  */
 void wifi_mw_set_port( uint8_t port );
 
@@ -199,21 +203,27 @@ void wifi_mw_set_port( uint8_t port );
  * @brief Bypass the "send" part of the "scan & send" sequence. Basically it is a "scan only" mode.
  * It can be used if the application wants to control how the scan results are sent over the air.
  *
- * By default it is set to false.
+ * @param [in] no_send Boolean to bypass send or not
+ *
+ * By default it is set to false
  */
 void wifi_mw_send_bypass( bool no_send );
 
 /**
- * @brief Indicates the format of the payload to be sent: MAC address only or MAC address with RSSI.
+ * @brief Indicates the format of the payload to be sent: MAC address only or MAC address with RSSI
  *
- * By default it is set to MAC address only.
+ * @param [in] format Payload format to be used
+ *
+ * By default it is set to MAC address only
  */
 void wifi_mw_set_payload_format( wifi_mw_payload_format_t format );
 
 /**
- * @brief Print the results of the GNSS_MW_EVENT_SCAN_DONE event.
+ * @brief Print the data received with the WIFI_MW_EVENT_SCAN_DONE event
+ *
+ * @param [in] data Scan results to be printed on the console
  */
-void wifi_mw_display_results( wifi_mw_event_data_scan_done_t data );
+void wifi_mw_display_results( const wifi_mw_event_data_scan_done_t* data );
 
 #ifdef __cplusplus
 }

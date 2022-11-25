@@ -443,11 +443,11 @@ void HAL_GPIO_EXTI_Callback( uint16_t gpio_pin )
             gpio_pin = gpio_pin >> 1;
             callback_index++;
         }
-    }
 
-    if( ( gpio_irq[callback_index] != NULL ) && ( gpio_irq[callback_index]->callback != NULL ) )
-    {
-        gpio_irq[callback_index]->callback( gpio_irq[callback_index]->context );
+        if( ( gpio_irq[callback_index] != NULL ) && ( gpio_irq[callback_index]->callback != NULL ) )
+        {
+            gpio_irq[callback_index]->callback( gpio_irq[callback_index]->context );
+        }
     }
 }
 

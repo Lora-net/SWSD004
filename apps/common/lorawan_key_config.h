@@ -122,6 +122,11 @@ extern "C" {
 #define LORAWAN_REGION_DEFAULT SMTC_MODEM_REGION_EU_868
 
 /*!
+ * @brief LoRaWAN regulatory sub region country. define LoRaWAN subregion countries, 0 means disable, 1 means enable
+ */
+#define ACTIVATE_SUB_REGION_JAPAN 0
+
+/*!
  * @brief LoRaWAN class - see @ref smtc_modem_class_t
  */
 #define LORAWAN_CLASS_DEFAULT SMTC_MODEM_CLASS_A
