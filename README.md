@@ -4,6 +4,15 @@ The LoRa Basics Modem Geolocation SDK contains several examples to demonstrate t
 
 This project contains a demonstration for a full-feature tracker application, as well as simple Wi-Fi and GNSS scanning examples, based on LoRa Basics Modem and geolocation middlewares which provide abstraction on top of LR11xx transceiver
 
+## Changelog and current version
+
+Here is the different components changelogs and current version included in this SDK :
+
+-   [SWSD004 v1.2.0 Changelog](geolocation_middleware/CHANGELOG.md)
+-   [Tracker application v2.2.0 Changelog](apps/demonstrations/tracker_application/CHANGELOG.md)
+-   [Geolocation middleware v2.0.0 Changelog](geolocation_middleware/CHANGELOG.md)
+-   [LoRa Basics Modem v3.2.4 Changelog](lora_basics_modem/lora_basics_modem/CHANGELOG.md)
+
 ## Examples
 
 | Name                       | Description                                                                              | Documentation                                           |

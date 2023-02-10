@@ -331,7 +331,7 @@ typedef struct
     float    gnss_assistance_position_longitude;
 
     /* Results values */
-    gnss_mw_event_data_terminated_t gnss_nb_scan_sent;
+    gnss_mw_event_data_terminated_t gnss_mw_event_data;
     uint8_t                         last_nb_detected_satellites;
     wifi_mw_event_data_terminated_t wifi_nb_scan_sent;
     uint8_t                         last_nb_detected_mac_address;

@@ -209,9 +209,7 @@ Supported values for `LORAWAN_CLASS`:
 
 ### Join configuration
 
-The LR1110 is pre-provisioned with a ChipEUI/DevEUI and a JoinEUI. The application will use these identifiers if the code is compiled with the flag `CRYPTO=LR11XX_WITH_CREDENTIALS` and the parameter `Use Semtech Join Server mode` set to true which is the default case.
-
-Alternatively, you can provide your own EUIs in `/apps/common/lorawan_commissioning.h` and by setting `Use Semtech Join Server mode` to false to any other value and by changing the values of `LORAWAN_DEVICE_EUI` and `LORAWAN_JOIN_EUI` and `LORAWAN_APP_KEY`.
+The LR1110 is pre-provisioned with a ChipEUI/DevEUI and a JoinEUI. The application will use these identifiers because the code is compiled with the flag `CRYPTO=LR11XX_WITH_CREDENTIALS` and the parameter `Use Semtech Join Server mode` is set to true by default.
 
 ## Build
 
@@ -242,16 +240,30 @@ it has to be programmed at the 0x08000000 address.
 
 For instance ( with STM32_Programmer_CLI ):
 ```
-./STM32_Programmer_CLI.exe -c port=SWD -w "PATH\lora-basics-modem-sdk\apps\demonstrations\tracker_application\bin\BLE_Ota.bin" 0x08000000
+./STM32_Programmer_CLI.exe -c port=SWD -w "PATH\SWSD004\apps\demonstrations\tracker_application\bin\BLE_Ota.bin" 0x08000000
+```
+on linux
+```
+./STM32_Programmer_CLI -c port=SWD -w PATH//SWSD004/apps/demonstrations/tracker_application/bin/BLE_Ota.bin 0x08000000
 ```
 
 The application `tracker_application.bin` is located in `apps/demonstrations/tracker_application/makefile/build` folder, 
 it has to be programmed at the 0x08007000 address
 
 for instance ( with STM32_Programmer_CLI ):
+on windows :
 ```
-./STM32_Programmer_CLI.exe -c port=SWD -w "PATH\lora-basics-modem-sdk\apps\demonstrations\tracker_application\bintracker_application.bin" 0x08007000
+./STM32_Programmer_CLI.exe -c port=SWD -w "PATH\SWSD004\apps\demonstrations\tracker_application\bin\tracker_application.bin" 0x08007000
+
+./STM32_Programmer_CLI.exe -c port=SWD -w "PATH\SWSD004\apps\demonstrations\tracker_application\makefile\build\tracker_application.bin" 0x08007000
 ```
+on linux
+```
+./STM32_Programmer_CLI -c port=SWD -w PATH//SWSD004/apps/demonstrations/tracker_application/bin/tracker_application.bin 0x08007000
+
+./STM32_Programmer_CLI -c port=SWD -w PATH//SWSD004/apps/demonstrations/tracker_application/makefile/build/tracker_application.bin 0x08007000
+```
+
 ### Building with Keil MDK
 
 Use the Keil project  `tracker_application.uvprojx` located in the `apps/demonstrations/tracker_application/MDK-ARM` directory.

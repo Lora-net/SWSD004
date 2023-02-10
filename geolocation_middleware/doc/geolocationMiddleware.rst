@@ -6,14 +6,22 @@ Geolocation middlewares
 Introduction
 ------------
 
-The geolocation middlewares aim to provide a high level API to run "scan & send" sequences, as simply as possible.
+The geolocation middleware aims to provide a high level API to run "scan & send" sequences, as simply as possible.
 
-The middlewares provide an abstraction layer:
+It implements the protocols specified by LoRaCloud "Modem and Geolocation Services" in order to simplify end-to-end integration.
+
+The particular protocols involved are:
+
+* the `Modem` protocol for time synchronization and almanac update.
+* the `GNSS Nav-Group (GNSS-NG)` protocol for GNSS scanning with best accuracy positioning and automatic aiding position update.
+* the `LoRa Edge Wi-Fi positioning` protocol for Wi-Fi scanning.
+
+The middleware provides an abstraction layer:
 
 * on top of the LR11xx radio for geolocation features (GNSS & Wi-Fi scanning)
-* based upon the LoRa Basics Modem for scheduling operations and sending results.
+* based upon the LoRa Basics Modem for scheduling operations and sending results over LoRaWAN.
 
-The goal is to expose as few parameters as possible to the user application, to accomplish pre-defined use cases with the best performances.
+The goal is to expose as few parameters as possible to the user application, to accomplish pre-defined modes of operation (static device, mobile device, ...) with the best performances.
 
 The user application just has to program when the next scan needs to be launched. The middleware will notify when the operation has completed with events.
 
@@ -33,19 +41,19 @@ GNSS middleware
 
 .. _GNSS scan group:
 
-Scan group
-++++++++++
+Scan group (GNSS Nav-Group)
++++++++++++++++++++++++++++
+
+------- TODO: add link to GNSS Nav-Group description of LoRaCloud --------
 
 In order to get the best accuracy from GNSS scan results, it is recommended to use the **multiframe** feature of the solver.
 
 In this context, a scan group is a group of scan results (NAV messages) to be used together to solve a position.
 
-A scan group also has an identifier (a token) used to identify the NAV messages which have to be grouped for multiframe solving by the Application Server.
+A scan group also has an identifier (a token) used to identify the NAV messages which have to be grouped together for multiframe solving.
 
-A scan group can be *valid* if all scans within the group meets the expected criteria (minimum number of Space Vehicles detected...).
+A scan group can be *valid* if there is enough scans within the group that meet the expected criteria (minimum number of Space Vehicles detected...).
 So it can also be *invalid*, in this case the results will not be sent over the air by the middleware.
-
-As soon as a scan with the group doesn't meet the expected criteria, the scan group is aborted.
 
 .. _GNSS scanning modes:
 
@@ -62,12 +70,12 @@ Selecting a particular mode will indicate to the middleware how operations must 
     **STATIC mode**
 
     When this mode is selected, with ``GNSS_MW_MODE_STATIC``, the GNSS middleware will run 4 GNSS scans, with a delay of 15 seconds between the end of a scan and the start of the next one.
-    Once the last scan is completed, it will send each scan result with a LoRaWAN uplink, one after the other. The full scheme is shown on figure `fig_geoloc_staticScanScheme`_
+    Once the last scan is completed, it will send each scan result within a LoRaWAN uplink, one after the other. The full scheme is shown on figure `fig_geoloc_staticScanScheme`_
 
     **MOBILE mode**
 
     When this mode is selected, with ``GNSS_MW_MODE_MOBILE``, the GNSS middleware will run 2 GNSS scans, with no delay between the end of a scan and the start of the next one.
-    Once the last scan is completed, it will send each scan result with a LoRaWAN uplink, one after the other. The full scheme is shown on figure `fig_geoloc_mobileScanScheme`_
+    Once the last scan is completed, it will send each scan result within a LoRaWAN uplink, one after the other. The full scheme is shown on figure `fig_geoloc_mobileScanScheme`_
 
 
 .. _fig_geoloc_staticScanScheme:
@@ -93,17 +101,22 @@ Selecting a particular mode will indicate to the middleware how operations must 
 Events notification
 +++++++++++++++++++
 
-In order to inform the user application about the "scan & send" sequence status, it will send several events to indicate what happened and allow the user application to take actions.
+In order to inform the user application about the "scan & send" sequence status, the middleware send several events to indicate what happened and allow the user application to take actions.
 
-* **SCAN_DONE**: This event is always sent, at the end of the scan sequence (before sending results over the air). It is also sent if the scan group has been aborted, and set to invalid.
-* **TERMINATED**: This event is always sent, at the end of the send sequence (even if nothing has been sent).
+* **SCAN_DONE**: This event is always sent, at the end of the scan sequence (before sending results over the air). It is also sent if the scan group has been aborted, and set to invalid. This event also indicates to the user application if it has to trig an almanac update modem device management uplink.
+* **TERMINATED**: This event is always sent, at the end of the send sequence (even if nothing has been sent). It indicates the number of uplinks that have been sent, if an aiding position check message has been sent, and if it has detected that the device is indoor or not.
 * **CANCELLED**: Sent when the middleware acknowledges a user cancel request.
 * **ERROR_ALMANAC**: Sent when a scan could not be done due to an ALMANAC being too old.
 * **ERROR_NO_TIME**: Sent when a scan could not be done due to no valid time available (clock sync).
 * **ERROR_NO_AIDING_POSITION**: Sent when a scan could not be done due to no assistance position configured.
 * **ERROR_UNKNOWN**: An unknown error occurred during the sequence.
 
-When data associated with an event are available, a dedicated API function to retrieve those data is provided. It is the case for SCAN DONE event and TERMINATED event.
+When data associated with an event are available, a dedicated API function to retrieve those data is provided. It is the case for SCAN DONE event and TERMINATED event:
+
+* ``gnss_mw_get_event_data_scan_done()``
+* ``gnss_mw_get_event_data_terminated()``
+
+Once the application has retrieved pending events and handled it, it must call the ``gnss_mw_clear_pending_events()`` API function.
 
 .. _GNSS internal choices:
 
@@ -113,19 +126,16 @@ Internal choices
 In order to reach an acceptable trade-off for performances, power consumption and simplicity, some parameters have been set in the middleware, and are not configurable from the API.
 
 * A maximum of 10 Space Vehicles detected per NAV message: allow good accuracy while still being able to transmit a complete NAV message in 1 uplink (49 bytes when dopplers are enabled).
-* LR1110 scan parameters: dopplers are enabled for autonomous scan only so that the doppler solver can be used to get an assistance position back.
-* There are 2 scan group modes to choose the strategy for determining when a scan group is valid or not:
-
-  * `GNSS_SCAN_GROUP_MODE_DEFAULT`: a scan group is valid if the number of valid scans is equal to the group size. As soon as a scan fails (not enough SV detected), the scan group is aborted and not sent over the air (for power consumption saving).
-  * `GNSS_SCAN_GROUP_MODE_SENSITIVITY`: a scan group is valid as soon as there is a valid scan in the group (with a valid NAV message). This mode optimizes the chances to get a position even if the environment is not ideal. The position accuracy can be lower than with GNSS_SCAN_GROUP_MODE_DEFAULT mode because the position solving could be done with less data.
+* LR1110 scan parameters: dopplers are enabled only for autonomous scans or for aiding position update scans, so that the doppler solver can be used to get an assistance position update from LoRaCloud.
+* A scan group is valid as soon as there is a valid scan in the group (with a valid NAV message).
 
 Some clarification about what is a valid scan group, a valid scan or a valid NAV message:
 
-* *scan group*: a scan group is valid if the result of the function `gnss_scan_group_queue_is_valid()` is true, which depends on the scan group mode selected.
-* *scan*: a scan is valid if the LR11xx radio returned a minimum number of detected space vehicles (the minimum number is defined by the scanning mode).
+* *scan group*: a scan group is valid if the result of the function `gnss_scan_group_queue_is_valid()` is true.
+* *scan*: a scan is valid if the LR11xx radio returned more than 0 detected space vehicles.
 * *NAV message*: a NAV message is valid if the result of the function `smtc_gnss_is_nav_message_valid()` is true, which depends on the number of SV detected per constellation.
 
-For example, in `GNSS_SCAN_GROUP_MODE_SENSITIVITY` scan group mode, a scan group is:
+For example a scan group is:
 
 * *not valid* if there was only one valid scan with an invalid NAV message.
 * *valid* if there were 2 valid scans, even if the individual NAV messages would be invalid (no check on individual NAV validity for multiframe solving).
@@ -140,9 +150,8 @@ We have made the choice to keep configuration parameters as low as possible for 
 By default:
 
 * The GNSS constellations used are: **GPS & BEIDOU**
-* Each scan results is sent as a dedicated LoRaWAN uplink on **port 194**.
+* Each scan results is sent as a dedicated LoRaWAN uplink on **port 192**.
 * The scan group token is incremented by 1 for each valid scan group.
-* The scan group mode selected is `GNSS_SCAN_GROUP_MODE_SENSITIVITY`.
 
 .. _GNSS advanced options:
 
@@ -152,24 +161,9 @@ Advanced options
 Some default parameters can be overruled for specific use cases:
 
 * The constellations to be used: use GPS only, BEIDOU only
-* The port on which the LoRaWAN uplink is sent
+* The port on which the LoRaWAN uplink is sent. WARNING: it should be changed accordingly on LoRaCloud side to keep integration functional.
 * The sequence can be set as "send_bypass" mode, meaning that the scan results won't be automatically sent by the middleware. It can be useful if the user application wants to send the result in a specific manner (using modem streaming feature...).
 * Several scan groups can be aggregated together by keeping the same token. It can be useful for non-mobile objects for multiframe solving with a sliding window.
-
-.. _GNSS assistance Position:
-
-Assistance/Aiding Position
-++++++++++++++++++++++++++
-
-The best performances for GNSS geolocation is achieved by using the "assisted scan" feature of the LR1110 radio. In order to use this feature, the middleware needs to provide an assistance position to the radio.
-
-There are 2 ways to provide this assistance position:
-
-* an assistance position is given by the user at application startup.
-* no assistance position is given by the user, so the middleware starts with an "autonomous scan" and rely on the solver and the application server to return an assistance position with an applicative downlink based on the autonomous can result.
-
-Note: When using autonomous scan, the sensitivity is not optimal. A better sky view is required to detect Space Vehicles compared to assisted scan.
-So it is recommended, if possible, to set an assistance position (as accurate as possible) at startup.
 
 .. _Internals of the GNSS middleware:
 
@@ -178,15 +172,15 @@ Internals of the GNSS middleware
 
 The main role of the middleware is to ease the usage of the LR11xx radio and avoid conflicts between the radio usage for GNSS scanning and other concurrent tasks in an application (transmitting packets...).
 
-For this, the middleware heavily relies on LoRa Basics Modem (LBM) and in particular its Radio Planner.
+For this, the middleware heavily relies on `LoRa Basics Modem` (LBM) and in particular its `Radio Planner`.
 
-In the LBM, the Radio Planner is responsible for arbitrating the radio usage and ensure that only one user tries to access it at a time.
+In LBM, the Radio Planner is responsible for arbitrating the radio usage and ensure that only one user tries to access it at a time.
 
 * So, when the user calls the ``gnss_mw_scan_start()`` function to start a GNSS scan in the specified delay, it basically schedules a new task in the Radio Planner. The task is scheduled with the ASAP mode, this means that if the radio is already busy at the requested time, the task will be shifted and executed As Soon As Possible.
 * When the Radio Planner is ready to launch the programmed task, the ``gnss_mw_scan_rp_task_launch()`` function is called, and the LR11xx radio is ready to be configured to perform the first scan of the scan group. **It is important to note that the code is executed under interrupt, so it needs to be as quick to execute as possible.**
 * Once the LR11xx radio has completed the scan, the Radio Planner will call the ``gnss_mw_scan_rp_task_done()`` function of the middleware. **Again, this function is executed under interrupt context, so needs to be fast.** This function will get the scan results and store it in the scan group queue. It will also send a ``GNSS_MW_EVENT_SCAN_DONE`` event to the application. The user application can retrieve scan results and statistics by calling the ``gnss_mw_get_event_data_scan_done()`` function.
 * Then, either it is the last scan of the group and it will trigger the first transmission, or it is not the last and it will program the next scan of the queue.
-* For sending results over the air, the middleware uses an extended internal API of the LBM which does not copy the buffer to be sent, so the middleware must ensure that the buffer to be sent keeps consistent until it is sent. The LBM will call the ``gnss_mw_tx_done_callback()`` for each completed transmission, and based on this, the middleware will pop all results to be sent over the air.
+* For sending results over the air, the middleware uses an extended internal API of the LBM which does not copy the buffer to be sent, so the middleware must ensure that the buffer to be sent keeps consistent until it is sent. The LBM will call the ``gnss_mw_tx_done_callback()`` for each completed transmission, and based on this, the middleware will pop from the queue all results to be sent over the air.
 * Once the last scan result of the scan group has been sent, the ``GNSS_MW_EVENT_TERMINATED`` event is sent to the application, and the scan sequence is over.
 
 .. _Prerequisites for a GNSS scan:
@@ -194,11 +188,12 @@ In the LBM, the Radio Planner is responsible for arbitrating the radio usage and
 Prerequisites for a GNSS scan
 +++++++++++++++++++++++++++++
 
-There are some prerequisites necessary to have a functional GNSS scan, and to get the best performances. It is the responsability of the user application to ensure that those requirements are met.
+There are some prerequisites necessary to have a functional GNSS scan, and to get the best performances. It is the responsibility of the user application to ensure that those requirements are met.
 
-* **time**: a valid time must be provided (ALC Sync, network clock sync...).
-* **almanac**: the Almanac written in the LR11xx flash memory must be as up-to-date as possible. It can either be be fully updated at once, or incrementally updated through LoRaCloud Modem & Geolocation Services.
+* **time**: a valid time must be provided (ALC Sync, network clock sync...). The Modem clock sync feature from LBM is used.
+* **almanac**: the Almanac written in the LR11xx flash memory must be as up-to-date as possible. It can either be be fully updated at once, or incrementally updated through LoRaCloud Modem & Geolocation Services. The Modem almanac update feature from LBM is used.
 * **assistance position**: an assistance position must be provided to the middleware, either as a user defined assistance position, or by forwarding the downlink coming from the solver.
+* **downlinks**: downlinks received by the user application on the port used by GNSS middleware should be transmitted to the middleware using the ``gnss_mw_handle_downlink()`` API function. It is important in order to receive an aiding position update from LoRaCloud.
 
 .. _GNSS scan results payload format:
 
@@ -213,17 +208,84 @@ The format is the following:
 
 .. table:: GNSS results payload format.
 
-    +---------------------+------------------+--------------------+
-    | scan group last NAV | scan group token | NAV message        |
-    +=====================+==================+====================+
-    | 1 bit               | 7 bits           | 36 or 49 bytes max |
-    +---------------------+------------------+--------------------+
+    +---------------------+--------+------------------+--------------------+
+    | scan group last NAV | RFU    | scan group token | NAV message        |
+    +=====================+========+==================+====================+
+    | 1 bit               | 2 bits | 5 bits           | 36 or 47 bytes max |
+    +---------------------+--------+------------------+--------------------+
 
-* scan group last NAV: indicates to the Application Server if this message is the last of a scan group. It can be used to trigger a multiframe solving request by the Application Server.
-* scan group token: it is the identifier of the current scan group. It is used by the Application Server to group the NAV message which should be used as a multiframe solving request.
+* scan group last NAV: indicates that this scan is the last of a scan group.
+* scan group token: it is the identifier of the current scan group. It is used to group the NAV message which should be used as a multiframe solving request.
 * NAV message: it is the GNSS scan result returned by the LR11xx radio. The actual size depends on the number of Space Vehicle detected by the scan, and if dopplers are enabled or not. For assisted scans, the maximum size is 49 bytes if dopplers are enabled, and 36 bytes otherwise.
 
 The maximum size of the complete payload has been kept under 51 bytes to match with the maximum payload size allowed by the LoRaWAN Regional Parameters for most regions (there are few exceptions like DR0 of the US915 region which therefore cannot be used).
+
+.. _GNSS Aiding Position Check messages payload format:
+
+Aiding Position Check (APC) payload format
+++++++++++++++++++++++++++++++++++++++++++
+
+When a scan group completes with no NAV message generated, the middleware will try to check if it is because the device is indoor (with an autonomous scan), or maybe because the current assistance position is too wrong to allow the assisted scan to detect anything.
+If it is not indoor, the middleware will send an Aiding Position Check (APC) message to LoRaCloud, to allow LoRaCloud to compare the current aiding position configured in the end-device, with any history or context it may have to check (Wi-Fi fix, network position...).
+
+There are 2 possible formats for APC messages:
+
+* APC0 (U-EXT_MSG-AIDPOSCHK0): contains the current assistance position configured in the end-device. This message is sent when it is detected not indoor, but no NAV message was generated with the autonomous scan for indoor check. LoRaCloud will need to have out-of-band context information in order to send a downlink with an aiding position back to the end-device.
+
+.. _table-apc0-payload:
+
+.. table:: APC0 payload format.
+
+    +------+----------------+-------------------------+
+    | TAG  | EXT-MSG marker | current aiding position |
+    +======+================+=========================+
+    | 0x00 | 0x00           | 3 bytes                 |
+    +------+----------------+-------------------------+
+
+* APC1 (U-EXT_MSG-AIDPOSCHK1): contains the current assistance position configured in the end-device and the NAV message resulting from the autonomous scan for indoor check. This gives a chance to LoRaCloud to get a fix from the solver (doppler or pseudo-range).
+
+.. _table-apc1-payload:
+
+.. table:: APC1 payload format.
+
+    +------+----------------+-------------------------+--------------------+
+    | TAG  | EXT-MSG marker | current aiding position | NAV message        |
+    +======+================+=========================+====================+
+    | 0x00 | 0x00           | 3 bytes                 | 44 bytes max       |
+    +------+----------------+-------------------------+--------------------+
+
+.. _GNSS assistance Position:
+
+Assistance/Aiding Position
+++++++++++++++++++++++++++
+
+The best performances for GNSS geolocation is achieved by using the "assisted scan" feature of the LR11xx radio. In order to use this feature, the middleware needs to provide an assistance position to the radio.
+
+There are 2 ways to provide this assistance position:
+
+* an assistance position is given by the user at application startup.
+* no assistance position is given by the user, so the middleware starts with an "autonomous scan" and rely on the solver and the application server to return an assistance position with an applicative downlink based on the autonomous can result.
+
+Note: When using autonomous scan, the sensitivity is not optimal. A better sky view is required to detect Space Vehicles compared to assisted scan.
+So it is recommended, if possible, to set an assistance position (as accurate as possible) at startup.
+
+The below diagram illustrates the sequence of operation of the middleware when no assistance position is provided at startup:
+
+.. _fig_geoloc_aiding_position_auto:
+
+.. figure:: geoloc_aiding_position_auto.png
+   :scale: 100%
+   :align: center
+   :alt: middleware scan sequence overview when no assistance position is provided at startup
+
+The below diagram illustrates the sequence of operation of the middleware to update the current assistance position if needed:
+
+.. _fig_geoloc_aiding_position_update:
+
+.. figure:: geoloc_aiding_position_update.png
+   :scale: 60%
+   :align: center
+   :alt: middleware scan sequence overview to update current assistance position if needed
 
 .. _LoRaWAN datarate considerations for GNSS:
 
@@ -262,8 +324,10 @@ Refer to the ``gnss/src/gnss_middleware.h`` file.
 Wi-Fi middleware
 ----------------
 
+The Wi-Fi middleware implements the `LoRa Edge Wi-Fi positioning protocol` specified by LoRaCloud.
+
 Contrary to the GNSS middleware, there is no scan group concept in the Wi-Fi middleware, and no multiframe solving.
-A Wi-Fi scan will simply return the list of Access Points MAC address that have been detected, and will be sent to the solver within one uplink message.
+A Wi-Fi scan will simply return the list of Access Points MAC address that have been detected (and optionally RSSI), and will be sent to the solver within one uplink message.
 
 .. _Wi-Fi events notification:
 
@@ -272,12 +336,17 @@ Events notification
 
 In order to inform the user application about the "scan & send" sequence status, it will send several events to indicate what happened and allow the user application to take actions.
 
-* **SCAN_DONE**: This event is always sent, at the end of the scan sequence (before sending results over the air). It is also sent if the scan group has been aborted, and set to invalid.
-* **TERMINATED**: This event is always sent, at the end of the send sequence (even if nothing has been sent).
+* **SCAN_DONE**: This event is always sent, at the end of the scan sequence (before sending results over the air). It is also sent if the scan has been aborted, and set to invalid.
+* **TERMINATED**: This event is always sent, at the end of the send sequence (even if nothing has been sent). It indicates the number of uplinks that have been sent.
 * **CANCELLED**: Sent when the middleware acknowledges a user cancel request.
 * **ERROR_UNKNOWN**: An unknown error occurred during the sequence.
 
-When data associated with an event are available, a dedicated API function to retrieve those data is provided. It is the case for SCAN DONE event and TERMINATED event.
+When data associated with an event are available, a dedicated API function to retrieve those data is provided. It is the case for SCAN DONE event and TERMINATED event:
+
+* ``wifi_mw_get_event_data_scan_done()``
+* ``wifi_mw_get_event_data_terminated()``
+
+Once the application has retrieved pending events and handled it, it must call the ``wifi_mw_clear_pending_events()`` API function.
 
 .. _Wi-Fi internal choices:
 
@@ -304,7 +373,8 @@ We have made the choice to keep configuration parameters as low as possible for 
 
 By default:
 
-* Each scan results is sent as a dedicated LoRaWAN uplink on **port 196**.
+* Each scan results is sent as a dedicated LoRaWAN uplink on **port 197**.
+* The frame format used is **WIFI_MW_PAYLOAD_MAC**.
 
 .. _Wi-Fi advanced options:
 
@@ -313,7 +383,7 @@ Advanced options
 
 Some default parameters can be overruled for specific use cases:
 
-* The port on which the LoRaWAN uplink is sent
+* The port on which the LoRaWAN uplink is sent. WARNING: it should be changed accordingly on LoRaCloud side to keep integration functional.
 * The sequence can be set as "send_bypass" mode, meaning that the scan results won't be automatically sent by the middleware. It can be useful if the user application wants to send the result in a specific manner (using modem streaming feature...).
 
 .. _Internals of the Wi-Fi middleware:
@@ -323,7 +393,7 @@ Internals of the Wi-Fi middleware
 
 The main role of the middleware is to ease the usage of the LR11xx radio and avoid conflicts between the radio usage for GNSS scanning and other concurrent use for other tasks in an application (transmitting packets...).
 
-For this, the middleware heavily relies on LoRa Basics Modem (LBM) and in particular its Radio Planner.
+For this, the middleware heavily relies on `LoRa Basics Modem` (LBM) and in particular its `Radio Planner`.
 
 In the LBM, the Radio Planner is responsible for arbitrating the radio usage and ensure that only one user tries to access it at a time.
 
@@ -338,9 +408,11 @@ In the LBM, the Radio Planner is responsible for arbitrating the radio usage and
 Scan results payload format
 +++++++++++++++++++++++++++
 
-As the middleware automatically sends the scan results for location solving, it has control over the format used for the uplink.
+The format of the payload is described by the `LoRa Edge Wi-Fi positioning protocol` of LoRaCloud.
 
-There are 2 formats possible, that the user can choose depending on the solver used:
+https://www.loracloud.com/documentation/modem_services?url=mdmsvc.html#lr1110-wifi-positioning-protocol
+
+There are 2 formats possible, that the user can choose:
 
 * `WIFI_MW_PAYLOAD_MAC`: contains only the MAC addresses of the detected Access Points
 * `WIFI_MW_PAYLOAD_MAC_RSSI`: contains the MAC addresses of the detected Access Points and the strength of the signal at which it has been detected.
@@ -350,23 +422,24 @@ There are 2 formats possible, that the user can choose depending on the solver u
 
 .. table:: Wi-Fi results payload format with MAC addresses only.
 
-    +-----------------+-----------------+-----+-----------------+
-    | AP1 MAC address | AP2 MAC address | ... | APn MAC address |
-    +=================+=================+=====+=================+
-    | 6 bytes         | 6 bytes         | ... | 6 bytes         |
-    +-----------------+-----------------+-----+-----------------+
+    +------+-----------------+-----------------+-----+-----------------+
+    | 0x00 | AP1 MAC address | AP2 MAC address | ... | APn MAC address |
+    +======+=================+=================+=====+=================+
+    |      | 6 bytes         | 6 bytes         | ... | 6 bytes         |
+    +------+-----------------+-----------------+-----+-----------------+
 
 
 .. _table-wifi-payload-mac-rssi:
 
 .. table:: Wi-Fi results payload format with MAC addresses and RSSI.
 
-    +----------+-----------------+----------+-----------------+-----+----------+-----------------+
-    | AP1 RSSI | AP1 MAC address | AP2 RSSI | AP2 MAC address | ... | APn RSSI | APn MAC address |
-    +==========+=================+==========+=================+=====+==========+=================+
-    | 1 byte   | 6 bytes         | 1 byte   | 6 bytes         | ... | 1 byte   | 6 bytes         |
-    +----------+-----------------+----------+-----------------+-----+----------+-----------------+
+    +------+----------+-----------------+----------+-----------------+-----+----------+-----------------+
+    | 0x01 | AP1 RSSI | AP1 MAC address | AP2 RSSI | AP2 MAC address | ... | APn RSSI | APn MAC address |
+    +======+==========+=================+==========+=================+=====+==========+=================+
+    |      | 1 byte   | 6 bytes         | 1 byte   | 6 bytes         | ... | 1 byte   | 6 bytes         |
+    +------+----------+-----------------+----------+-----------------+-----+----------+-----------------+
 
+The user application can select the format to be used using the ``wifi_mw_set_payload_format()`` API function.
 
 The maximum size of the complete payload has been kept under 51 bytes to match with the maximum payload size allowed by the LoRaWAN Regional Parameters for most regions (there are few exceptions like DR0 of the US915 region which therefore cannot be used).
 

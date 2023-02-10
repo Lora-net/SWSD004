@@ -81,7 +81,7 @@ extern "C" {
 /*!
  * @brief Defines the delay before starting the next scan sequence, value in [s].
  */
-#define GEOLOCATION_SCAN_PERIOD_DEFAULT 30
+#define GEOLOCATION_SCAN_PERIOD_DEFAULT 60
 
 /*!
  * @brief Defines the scan mode used for GNSS (STATIC or MOBILE).

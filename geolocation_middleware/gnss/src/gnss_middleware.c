@@ -105,7 +105,7 @@
 /**
  * @brief LoRaWAN port used for uplinks of the GNSS scan results
  */
-#define GNSS_APP_PORT 194
+#define GNSS_DEFAULT_UPLINK_PORT 192
 
 /**
  * @brief Solver aiding position buffer size (1byte for TAG and 3 for position)
@@ -116,6 +116,16 @@
  * @brief The LoRa Basics Modem extended uplink ID to be used for GNSS uplinks (TASK_EXTENDED_1)
  */
 #define SMTC_MODEM_EXTENDED_UPLINK_ID_GNSS 1
+
+/**
+ * @brief TODO
+ */
+#define LR11XX_GNSS_SCALING_LATITUDE 90
+
+/**
+ * @brief TODO
+ */
+#define LR11XX_GNSS_SCALING_LONGITUDE 180
 
 /*
  * -----------------------------------------------------------------------------
@@ -140,8 +150,18 @@ typedef struct
 {
     uint32_t scan_group_delay;  //!< The delay between the end of a scan and the start of the next one, in seconds
     uint8_t  scan_group_size;   //!< The number of scans in the scan group
-    uint8_t  sv_min;            //!< The minimum number of SV to be detected for the scan to be valid
+    uint8_t  scan_group_stop;   //!< The number of SVs in a scans necessary to stop the scan group
 } gnss_mw_mode_desc_t;
+
+/**
+ * @brief TODO
+ */
+typedef enum
+{
+    GNSS_MW_SCAN_TYPE_AUTONOMOUS,
+    GNSS_MW_SCAN_TYPE_ASSISTED,
+    GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION,
+} gnss_mw_scan_type_t;
 
 /*
  * -----------------------------------------------------------------------------
@@ -163,11 +183,6 @@ static uint8_t modem_stack_id = 0;
  * @brief The current scan group queue to store scan results
  */
 static gnss_scan_group_queue_t gnss_scan_group_queue;
-
-/*!
- * @brief Indicates if assisted scan can be used (an assistance position has been set)
- */
-static bool aiding_position_received = false;
 
 /*!
  * @brief Indicates if a user update of the current assistance position is ready to be written to the LR11xx on the next
@@ -192,17 +207,21 @@ static bool solver_aiding_position_update_received = false;
 static uint8_t solver_aiding_position_update[SOLVER_AIDING_POSITION_SIZE];
 
 /*!
- * @brief The scan group mode to be used
+ * @brief TODO
  */
-static gnss_scan_group_mode_t scan_group_mode = GNSS_SCAN_GROUP_MODE_SENSITIVITY;
+static gnss_mw_scan_type_t current_scan_type = GNSS_MW_SCAN_TYPE_AUTONOMOUS;
 
 /*!
  * @brief Pre-defined scan modes to be selected by the user depending on the use case (STATIC, MOBILE...)
  */
 static gnss_mw_mode_desc_t modes[__GNSS_MW_MODE__SIZE] = {
-    { .scan_group_delay = 15, .scan_group_size = 4, .sv_min = 3 }, /* GNSS_MW_MODE_STATIC */
-    { .scan_group_delay = 0, .scan_group_size = 2, .sv_min = 5 },  /* GNSS_MW_MODE_MOBILE */
+    { .scan_group_delay = 15, .scan_group_size = 4, .scan_group_stop = 0 }, /* GNSS_MW_MODE_STATIC */
+    { .scan_group_delay = 0, .scan_group_size = 2, .scan_group_stop = 0 },  /* GNSS_MW_MODE_MOBILE */
 };
+
+static gnss_mw_mode_desc_t aiding_position_request_mode = {
+    .scan_group_delay = 0, .scan_group_size = 4, .scan_group_stop = 8
+}; /* If at least 8 SVs detected on a scan, the scan group can be stopped and sent for solving */
 
 /*!
  * @brief The index of the modes[] array to get configuration for the current scan sequence
@@ -227,7 +246,7 @@ static lr11xx_gnss_constellation_mask_t current_constellations = LR11XX_GNSS_GPS
 /*!
  * @brief The LoRaWAN port on which results uplinks are sent
  */
-static uint8_t lorawan_port = GNSS_APP_PORT;
+static uint8_t lorawan_port = GNSS_DEFAULT_UPLINK_PORT;
 
 /*!
  * @brief Indicates if the next scan will use the same token as the previous one
@@ -256,6 +275,23 @@ static bool task_running = false;
  */
 static gnss_mw_scan_context_t lr11xx_scan_context;
 
+/*!
+ * @brief TODO
+ */
+static uint8_t aid_pos_check_buffer[5 + GNSS_RESULT_SIZE_MAX_MODE3] = { 0 }; /* | TAG | 0x00 | LAT/LON | NAV | */
+
+/*!
+ * @brief TODO
+ */
+static uint8_t stat_nb_scans_sent_within_current_scan_group = 0;
+static bool    stat_aiding_position_check_sent              = false;
+static bool    stat_indoor_detected                         = false;
+
+/*!
+ * @brief TODO
+ */
+static bool autonomous_scan_for_indoor_check = false;
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
@@ -269,6 +305,11 @@ static gnss_mw_scan_context_t lr11xx_scan_context;
  * @return the error code as returned by the modem / radio planner
  */
 static smtc_modem_return_code_t gnss_mw_scan_next( uint32_t delay_s );
+
+/*!
+ * @brief TODO
+ */
+static uint32_t gnss_mw_get_next_scan_delay( void );
 
 /*!
  * @brief Interrupt handler signaled by the Radio Planner when the radio is available and it is time to start the scan
@@ -287,12 +328,15 @@ static void gnss_mw_scan_rp_task_launch( void* context );
 static void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status );
 
 /*!
- * @brief Pop a result from the scan group queue, and send it over the air (uses extended API from LBM to send uplink)
+ * @brief Send an uplink with the current aiding position to LoRaCloud, for checking if possible and send a downlink
+ * update if necessary.
  *
- * @return a boolean set to true if a frame has been sent, set to false is there is nothing to be sent (queue empty or
- * bypass mode).
+ * @param [in] current_assistance_position The current aiding position configured
+ *
+ * @return a boolean set to true for success, false otherwise
  */
-static bool gnss_mw_send_results( void );
+static bool gnss_mw_send_aiding_position_check_request(
+    const lr11xx_gnss_solver_assistance_position_t* current_assistance_position, gnss_scan_t* scan );
 
 /*!
  * @brief Callback called by the LBM when the uplink has been sent. Pop the next result ot be sent until the scan group
@@ -308,7 +352,7 @@ static void gnss_mw_tx_done_callback( void );
  *
  * @return a boolean set to true for success, false otherwise.
  */
-static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx_frame_buffer_size );
+static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx_frame_buffer_size, uint8_t port );
 
 /*!
  * @brief Add an event to the pending event bitfield, and send all pending events to the application
@@ -316,6 +360,14 @@ static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx
  * @param [in] event_type The event to be added to the pending events bitfield.
  */
 static void gnss_mw_send_event( gnss_mw_event_type_t event_type );
+
+/**
+ * @brief Forward the aiding position received from the solver (through a downlink) to the LR11xx
+ *
+ * @param [in] payload Aiding position payload as transmitted by the solver
+ * @param [in] size Size of the aiding position payload
+ */
+static void gnss_mw_set_solver_aiding_position( const uint8_t* payload, uint8_t size );
 
 /*
  * -----------------------------------------------------------------------------
@@ -394,19 +446,32 @@ mw_return_code_t gnss_mw_scan_start( gnss_mw_mode_t mode, uint32_t start_delay )
     /* Reset any pending cancel request which has not been completed (error case) */
     task_cancelled_by_user = false;
 
+    /* Reset scan context */
+    memset( &lr11xx_scan_context, 0, sizeof lr11xx_scan_context );
+
+    /* Reset stats */
+    stat_nb_scans_sent_within_current_scan_group = 0;
+    stat_aiding_position_check_sent              = false;
+    stat_indoor_detected                         = false;
+
+    /* Switch back to assisted if previous scan was for aiding position request */
+    if( current_scan_type == GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION )
+    {
+        current_scan_type = GNSS_MW_SCAN_TYPE_ASSISTED;
+    }
+
     /* Initialize new scan group */
-    MW_DBG_TRACE_PRINTF( "New scan group for %s scan (%s) - %us\n",
-                         ( aiding_position_received == false ) ? "autonomous" : "assisted",
-                         ( scan_group_mode == GNSS_SCAN_GROUP_MODE_DEFAULT ) ? "DEFAULT" : "SENSITIVITY", start_delay );
-    if( aiding_position_received == false )
+    MW_DBG_TRACE_INFO( "New scan group - type:%d - start_delay:%us\n", current_scan_type, start_delay );
+    if( current_scan_type != GNSS_MW_SCAN_TYPE_ASSISTED )
     {
         scan_group_err =
-            gnss_scan_group_queue_new( &gnss_scan_group_queue, 1, scan_group_mode, GNSS_SCAN_SINGLE_NAV_MIN_SV );
+            gnss_scan_group_queue_new( &gnss_scan_group_queue, aiding_position_request_mode.scan_group_size,
+                                       aiding_position_request_mode.scan_group_stop );
     }
     else
     {
         scan_group_err = gnss_scan_group_queue_new( &gnss_scan_group_queue, modes[current_mode_index].scan_group_size,
-                                                    scan_group_mode, modes[current_mode_index].sv_min );
+                                                    modes[current_mode_index].scan_group_stop );
     }
     if( scan_group_err != true )
     {
@@ -427,6 +492,12 @@ mw_return_code_t gnss_mw_scan_start( gnss_mw_mode_t mode, uint32_t start_delay )
 mw_return_code_t gnss_mw_scan_cancel( void )
 {
     smtc_modem_return_code_t modem_rc;
+
+    if( modem_radio_ctx == NULL )
+    {
+        MW_DBG_TRACE_ERROR( "GNSS middleware not ready, no scan to cancel\n" );
+        return MW_RC_FAILED;
+    }
 
     /* The GNSS scan sequence will be in running state from the moment the task
     has been started by the RP, until all the packets have been sent over the
@@ -457,49 +528,13 @@ mw_return_code_t gnss_mw_scan_cancel( void )
 
 mw_return_code_t gnss_mw_set_user_aiding_position( float latitude, float longitude )
 {
-    if( modem_radio_ctx == NULL )
-    {
-        MW_DBG_TRACE_ERROR( "GNSS middleware not ready, cannot set aiding position yet\n" );
-        return MW_RC_FAILED;
-    }
-
     /* Store the user assistance position to be written to the LR11xx on the next scan */
     user_aiding_position_update.latitude  = latitude;
     user_aiding_position_update.longitude = longitude;
     user_aiding_position_update_received  = true;
 
     /* We can switch to assisted scan for the next scan */
-    aiding_position_received = true;
-
-    return MW_RC_OK;
-}
-
-mw_return_code_t gnss_mw_set_solver_aiding_position( const uint8_t* payload, uint8_t size )
-{
-    if( payload == NULL )
-    {
-        MW_DBG_TRACE_ERROR( "Provided pointer is NULL\n" );
-        return MW_RC_FAILED;
-    }
-
-    if( size != SOLVER_AIDING_POSITION_SIZE )
-    {
-        MW_DBG_TRACE_ERROR( "Unexpected size. Shall be %d\n", SOLVER_AIDING_POSITION_SIZE );
-        return MW_RC_FAILED;
-    }
-
-    if( modem_radio_ctx == NULL )
-    {
-        MW_DBG_TRACE_ERROR( "GNSS middleware not ready, cannot set aiding position yet\n" );
-        return MW_RC_FAILED;
-    }
-
-    /* Store the solver assistance position to be written to the LR11xx on the next scan */
-    memcpy( solver_aiding_position_update, payload, SOLVER_AIDING_POSITION_SIZE );
-    solver_aiding_position_update_received = true;
-
-    /* We can switch to assisted scan for the next scan */
-    aiding_position_received = true;
+    current_scan_type = GNSS_MW_SCAN_TYPE_ASSISTED;
 
     return MW_RC_OK;
 }
@@ -548,6 +583,7 @@ mw_return_code_t gnss_mw_get_event_data_scan_done( gnss_mw_event_data_scan_done_
         data->context.aiding_position_latitude  = lr11xx_scan_context.aiding_position_latitude;
         data->context.aiding_position_longitude = lr11xx_scan_context.aiding_position_longitude;
         data->context.almanac_crc               = lr11xx_scan_context.almanac_crc;
+        data->context.almanac_update_required   = lr11xx_scan_context.almanac_update_required;
 
         return MW_RC_OK;
     }
@@ -625,7 +661,8 @@ void gnss_mw_display_results( const gnss_mw_event_data_scan_done_t* data )
             MW_DBG_TRACE_PRINTF( "-- aiding position: (%.6f, %.6f)\n", data->context.aiding_position_latitude,
                                  data->context.aiding_position_longitude );
         }
-        MW_DBG_TRACE_PRINTF( "-- almanac CRC: 0X%08X\n\n", data->context.almanac_crc );
+        MW_DBG_TRACE_PRINTF( "-- almanac CRC: 0X%08X\n", data->context.almanac_crc );
+        MW_DBG_TRACE_PRINTF( "-- almanac update required: %d\n", data->context.almanac_update_required );
     }
 }
 
@@ -639,16 +676,9 @@ mw_return_code_t gnss_mw_get_event_data_terminated( gnss_mw_event_data_terminate
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_TERMINATED ) )
     {
-        if( send_bypass == false )
-        {
-            data->nb_scans_sent = gnss_scan_group_queue.nb_scans_sent;
-        }
-        else
-        {
-            /* assume that the "no send" mode was configured before starting the scan, so no packet sent */
-            data->nb_scans_sent = 0;
-        }
-
+        data->nb_scans_sent              = stat_nb_scans_sent_within_current_scan_group;
+        data->aiding_position_check_sent = stat_aiding_position_check_sent;
+        data->indoor_detected            = stat_indoor_detected;
         return MW_RC_OK;
     }
     else
@@ -659,6 +689,44 @@ mw_return_code_t gnss_mw_get_event_data_terminated( gnss_mw_event_data_terminate
 }
 
 void gnss_mw_clear_pending_events( void ) { pending_events = 0; }
+
+mw_return_code_t gnss_mw_handle_downlink( uint8_t port, const uint8_t* payload, uint8_t size )
+{
+    /* Check if this downlink is for the GNSS middleware, otherwise, just ignore it */
+    if( port != lorawan_port )
+    {
+        return MW_RC_OK;
+    }
+
+    /* Check input parameters */
+    if( payload == NULL )
+    {
+        MW_DBG_TRACE_ERROR( "Downlink payload pointer is NULL\n" );
+        return MW_RC_FAILED;
+    }
+    if( size < SOLVER_AIDING_POSITION_SIZE )
+    {
+        MW_DBG_TRACE_ERROR( "Downlink payload size not supported\n" );
+        return MW_RC_FAILED;
+    }
+
+    /* Check if the payload contains an D-GNSSLOC-AIDP: Aiding Position as defined by LoRaCloud */
+    if( payload[0] == 0x00 )
+    {
+        MW_DBG_TRACE_INFO( "Received D-GNSSLOC-AIDP solver message\n" );
+        gnss_mw_set_solver_aiding_position( payload, SOLVER_AIDING_POSITION_SIZE );
+    }
+    else
+    {
+        MW_DBG_TRACE_ERROR( "Unknown downlink type for GNSS: 0x%02X\n", payload[0] );
+        return MW_RC_FAILED;
+    }
+
+    /* Note: The remaining bytes (if any) will be ignored. In the future, we could support several messages in the
+     * payload */
+
+    return MW_RC_OK;
+}
 
 /*
  * -----------------------------------------------------------------------------
@@ -693,17 +761,32 @@ static smtc_modem_return_code_t gnss_mw_scan_next( uint32_t delay_s )
     return modem_rc;
 }
 
+static uint32_t gnss_mw_get_next_scan_delay( void )
+{
+    if( current_scan_type == GNSS_MW_SCAN_TYPE_ASSISTED )
+    {
+        return modes[current_mode_index].scan_group_delay;
+    }
+    else
+    {
+        return aiding_position_request_mode.scan_group_delay;
+    }
+}
+
 static void gnss_mw_scan_rp_task_launch( void* context )
 {
     smtc_modem_return_code_t                 err;
     uint32_t                                 gps_time           = 0;
     uint32_t                                 fractional_seconds = 0;
     lr11xx_gnss_solver_assistance_position_t lr11xx_aiding_position;
+    smtc_gnss_scan_params_t                  scan_params;
+    gnss_mw_scan_type_t                      scan_type =
+        ( ( autonomous_scan_for_indoor_check == true ) ? GNSS_MW_SCAN_TYPE_AUTONOMOUS : current_scan_type );
 
     /* From now, the scan sequence can not be cancelled */
     task_running = true;
 
-    MW_DBG_TRACE_MSG( "---- internal scan start ----\n" );
+    MW_DBG_TRACE_PRINTF( "---- internal scan start (%d) ----\n", scan_type );
 
     err = smtc_modem_get_time( &gps_time, &fractional_seconds );
     if( err == SMTC_MODEM_RC_OK )
@@ -740,12 +823,42 @@ static void gnss_mw_scan_rp_task_launch( void* context )
                                     &lr11xx_scan_context.almanac_crc );
         lr11xx_scan_context.aiding_position_latitude  = lr11xx_aiding_position.latitude;
         lr11xx_scan_context.aiding_position_longitude = lr11xx_aiding_position.longitude;
-        lr11xx_scan_context.assisted                  = aiding_position_received;
+        lr11xx_scan_context.assisted                  = ( scan_type == GNSS_MW_SCAN_TYPE_AUTONOMOUS ) ? false : true;
         lr11xx_scan_context.mode                      = current_mode_index;
+        lr11xx_scan_context.gps_time                  = gps_time;
+
+        /* Set GNSS scan parameters */
+        scan_params.constellations = current_constellations;
+        switch( scan_type )
+        {
+        case GNSS_MW_SCAN_TYPE_AUTONOMOUS:
+            scan_params.assisted          = false;
+            scan_params.freq_search_space = LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_250_HZ; /* not used */
+            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_MASK +
+                                           LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 14 dopplers max, no bit change */
+            scan_params.nb_svs_max =
+                9; /* NAV2: 9 SV + 9 dopplers => 44 bytes (reduce nb SV to keep space for APC message)*/
+            break;
+        case GNSS_MW_SCAN_TYPE_ASSISTED:
+            scan_params.assisted          = true;
+            scan_params.freq_search_space = LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_250_HZ;
+            scan_params.input_parameters  = 0; /* no dopplers, no bit change */
+            scan_params.nb_svs_max        = GNSS_NB_SVS_MAX;
+            break;
+        case GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION:
+            scan_params.assisted          = true;
+            scan_params.freq_search_space = LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_2_KHZ;
+            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_MASK +
+                                           LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 14 dopplers max, no bit change */
+            scan_params.nb_svs_max =
+                9; /* NAV2: 9 SV + 9 dopplers => 47 bytes (reduce nb SV to keep payload under 50 bytes) */
+            break;
+        default:
+            break;
+        }
 
         /* Start GNSS scan */
-        if( smtc_gnss_scan( modem_radio_ctx->ral.context, gps_time, aiding_position_received,
-                            current_constellations ) != true )
+        if( smtc_gnss_scan( modem_radio_ctx->ral.context, gps_time, &scan_params ) != true )
         {
             pending_error = GNSS_MW_ERROR_SCAN_FAILED;
 
@@ -789,7 +902,7 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     smtc_modem_rp_radio_status_t irq_status = status->status;
     uint32_t                     time_ms;
     uint32_t                     meas_time;
-    uint32_t                     power_consuption_uah;
+    uint32_t                     power_consumption_uah;
 
     /* -------------------------------------------------------------------------
        WARNING: put the radio back to sleep before exiting this function.
@@ -814,7 +927,7 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
             {
                 MW_DBG_TRACE_WARNING( "RP_TASK_GNSS(%d) - task aborted by RP\n", __LINE__ );
                 /* Program next GNSS scan */
-                MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( modes[current_mode_index].scan_group_delay ) );
+                MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( gnss_mw_get_next_scan_delay( ) ) );
             }
             else
             {
@@ -848,19 +961,26 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     }
     else if( irq_status == SMTC_RP_RADIO_GNSS_SCAN_DONE )
     {
-        gnss_scan_t                         scan_results = { 0 };
-        smtc_gnss_get_results_return_code_t scan_results_rc;
+        gnss_scan_t                              scan_results = { 0 };
+        smtc_gnss_get_results_return_code_t      scan_results_rc;
+        bool                                     scan_results_no_sv      = false;
+        bool                                     doppler_error           = false;
+        bool                                     almanac_update_required = false;
+        lr11xx_gnss_solver_assistance_position_t current_assistance_position;
+
+        current_assistance_position.latitude  = lr11xx_scan_context.aiding_position_latitude;
+        current_assistance_position.longitude = lr11xx_scan_context.aiding_position_longitude;
 
         /* Get scan results from LR1110 */
         scan_results.timestamp = mw_get_gps_time( );
         scan_results_rc =
             smtc_gnss_get_results( modem_radio_ctx->ral.context, GNSS_RESULT_SIZE_MAX_MODE3, &scan_results.results_size,
-                                   &scan_results.results_buffer[GNSS_SCAN_METADATA_SIZE] );
+                                   &scan_results.results_buffer[GNSS_SCAN_METADATA_SIZE], &scan_results_no_sv );
 
         /* Get scan power consumption and aggregate it to the scan group power consumption */
-        smtc_gnss_get_power_consumption( modem_radio_ctx->ral.context, &power_consuption_uah );
-        GNSS_MW_TIME_CRITICAL_TRACE_PRINTF( "Scan power consuption: %u uah\n", power_consuption_uah );
-        gnss_scan_group_queue.power_consumption_uah += power_consuption_uah;
+        smtc_gnss_get_power_consumption( modem_radio_ctx->ral.context, &power_consumption_uah );
+        GNSS_MW_TIME_CRITICAL_TRACE_PRINTF( "Scan power consumption: %u uah\n", power_consumption_uah );
+        gnss_scan_group_queue.power_consumption_uah += power_consumption_uah;
 
         if( scan_results_rc == SMTC_GNSS_GET_RESULTS_NO_ERROR )
         {
@@ -868,30 +988,126 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
             smtc_gnss_get_sv_info( modem_radio_ctx->ral.context, GNSS_NB_SVS_MAX, &scan_results.detected_svs,
                                    scan_results.info_svs );
 
-            /* Check if the NAV message is valid (the solver can use this single NAV to get a position) */
-            scan_results.nav_valid = smtc_gnss_is_nav_message_valid( current_constellations, scan_results.detected_svs,
-                                                                     scan_results.info_svs );
-
-            /* Push scan to the scan group */
-            gnss_scan_group_queue_push( &gnss_scan_group_queue, &scan_results );
-
-            /* Trigger next GNSS scan or send first scan results, if scan group completed */
-            if( gnss_scan_group_queue_is_full( &gnss_scan_group_queue ) == false )
+            if( autonomous_scan_for_indoor_check == true )
             {
-                /* Program next GNSS scan */
-                MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( modes[current_mode_index].scan_group_delay ) );
+                /* The scan which just completed was for an indoor / aiding position check */
+                autonomous_scan_for_indoor_check = false;
+
+                if( scan_results_no_sv == true )
+                {
+                    /* If NO SATELLITES has been detected, we consider the device is indoor */
+                    stat_indoor_detected = true;
+                    gnss_mw_send_event( GNSS_MW_EVENT_TERMINATED );
+                }
+                else
+                {
+                    /* The autonomous scan detected some SVs but not enough to generate a NAV, so send an aiding
+                     * position check uplink */
+                    stat_aiding_position_check_sent = true;
+                    gnss_mw_send_aiding_position_check_request( &current_assistance_position, &scan_results );
+                }
             }
             else
             {
-                /* All scans in the group have been completed, send an event to application */
-                gnss_mw_send_event( GNSS_MW_EVENT_SCAN_DONE );
-
-                /* Send scan uplink if any and not in bypass mode */
-                if( gnss_mw_send_results( ) == false )
+                /* Get almanac update status (once per scan group) */
+                if( lr11xx_scan_context.almanac_update_checked == false )
                 {
-                    /* Send an event to application to notify for completion */
-                    /* The application needs to know that it can proceed with the next scan */
-                    gnss_mw_send_event( GNSS_MW_EVENT_TERMINATED );
+                    smtc_gnss_get_almanac_update_status( modem_radio_ctx->ral.context, lr11xx_scan_context.gps_time,
+                                                         &current_assistance_position, current_constellations,
+                                                         &almanac_update_required );
+                    /* Update scan context */
+                    lr11xx_scan_context.almanac_update_checked  = true;
+                    lr11xx_scan_context.almanac_update_required = almanac_update_required;
+                }
+
+                /* Check if there is doppler error for detected satellites (if assisted scan) */
+                if( ( scan_results.detected_svs > 0 ) && ( current_scan_type != GNSS_MW_SCAN_TYPE_AUTONOMOUS ) &&
+                    ( lr11xx_scan_context.almanac_update_required == false ) )
+                {
+                    smtc_gnss_get_doppler_error(
+                        modem_radio_ctx->ral.context, lr11xx_scan_context.gps_time, &current_assistance_position,
+                        current_constellations, scan_results.detected_svs, scan_results.info_svs,
+                        &doppler_error ); /* TODO: need to add constellations to scan context */
+                }
+
+                if( ( doppler_error == true ) &&
+                    ( current_scan_type != GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION ) )
+                {
+                    current_scan_type = GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION;
+
+                    /* Save power consumption */
+                    uint32_t power_consumption_uah_save = gnss_scan_group_queue.power_consumption_uah;
+
+                    /* Clear current queue and reconfigure */
+                    gnss_scan_group_queue_new( &gnss_scan_group_queue, aiding_position_request_mode.scan_group_size,
+                                               aiding_position_request_mode.scan_group_stop );
+
+                    /* Restore power consumption */
+                    gnss_scan_group_queue.power_consumption_uah = power_consumption_uah_save;
+
+                    /* Program next GNSS scan */
+                    MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( 0 ) );
+                }
+                else
+                {
+                    /* Check if the NAV message is valid (the solver can use this single NAV to get a position) */
+                    scan_results.nav_valid = smtc_gnss_is_nav_message_valid(
+                        current_constellations, scan_results.detected_svs, scan_results.info_svs );
+
+                    /* Push scan to the scan group */
+                    gnss_scan_group_queue_push( &gnss_scan_group_queue, &scan_results );
+
+                    /* Trigger next GNSS scan or send first scan results, if scan group completed */
+                    if( gnss_scan_group_queue_is_full( &gnss_scan_group_queue ) == false )
+                    {
+                        /* Program next GNSS scan */
+                        MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( gnss_mw_get_next_scan_delay( ) ) );
+                    }
+                    else
+                    {
+                        /* All scans in the group have been completed, send an event to application */
+                        gnss_mw_send_event( GNSS_MW_EVENT_SCAN_DONE );
+
+                        /* Send results */
+                        /* static variables because there is no copy done by LBM for extended send API */
+                        static uint8_t* buffer_to_send;
+                        static uint8_t  buffer_to_send_size;
+
+                        /* Is there any scan to be sent ? */
+                        if( gnss_scan_group_queue_pop( &gnss_scan_group_queue, &buffer_to_send,
+                                                       &buffer_to_send_size ) == false )
+                        {
+                            /* No SV detected for this scan group, program an autonomous scan for indoor check / aiding
+                             * position check */
+                            autonomous_scan_for_indoor_check = true;
+                            MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( 0 ) );
+                            /* TODO: if current scan was an autonomous one, we could avoid this last one for indoor
+                             * check */
+                        }
+                        else
+                        {
+                            /* Check if "no send "mode" is configured */
+                            if( send_bypass == true )
+                            {
+                                /* Send an event to application to notify for completion */
+                                /* The application needs to know that it can proceed with the next scan */
+                                gnss_mw_send_event( GNSS_MW_EVENT_TERMINATED );
+                            }
+                            else
+                            {
+                                /* Send uplink */
+                                if( gnss_mw_send_frame( buffer_to_send, buffer_to_send_size, lorawan_port ) == false )
+                                {
+                                    MW_DBG_TRACE_ERROR( "Failed to send uplink frame\n" );
+                                    /* TODO: send error event ? */
+                                }
+                                else
+                                {
+                                    stat_nb_scans_sent_within_current_scan_group += 1;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -928,48 +1144,47 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
         gnss_mw_send_event( GNSS_MW_EVENT_ERROR_UNKNOWN );
     }
 
-    /* Check if callback exec duration is not too long */
+    /* Monitor callback exec duration (should be kept as low as possible) */
     meas_time = smtc_modem_hal_get_time_in_ms( );
-    if( ( meas_time - time_ms ) > 3 )
-    {
-        MW_DBG_TRACE_WARNING( "GNSS RP task - done callback duration %u ms\n", meas_time - time_ms );
-    }
+    MW_DBG_TRACE_WARNING( "GNSS RP task - done callback duration %u ms\n", meas_time - time_ms );
 
     /* Set the radio back to sleep */
     mw_radio_set_sleep( modem_radio_ctx->ral.context );
 }
 
-/*!
- * @brief User private function
- */
-
-static bool gnss_mw_send_results( void )
+static bool gnss_mw_send_aiding_position_check_request(
+    const lr11xx_gnss_solver_assistance_position_t* current_assistance_position, gnss_scan_t* scan )
 {
-    bool success = false;
+    bool          success   = false;
+    const int16_t latitude  = ( ( current_assistance_position->latitude * 2048 ) / LR11XX_GNSS_SCALING_LATITUDE );
+    const int16_t longitude = ( ( current_assistance_position->longitude * 2048 ) / LR11XX_GNSS_SCALING_LONGITUDE );
 
-    /* static variables because there is no copy done by LBM for extended send API */
-    static uint8_t* buffer_to_send;
-    static uint8_t  buffer_to_send_size;
+    /* Prepare buffer for request */
+    /* | TAG (8b) | 0x00 | LatLSB (8b) | LonLSB (4b) LatMSB (4b) | LonMSB (8b) | */
+    aid_pos_check_buffer[0] = ( scan->detected_svs > 0 ) ? 0x01 : 0x00; /* TAG */
+    aid_pos_check_buffer[1] = 0x00;                                     /* Extension marker */
 
-    /* Check if "no send "mode" is configured */
-    if( send_bypass == true )
+    /* Current aiding position */
+    aid_pos_check_buffer[2] = latitude & 0xFF;
+    aid_pos_check_buffer[3] = ( ( longitude & 0x00F ) << 4 ) | ( ( latitude & 0xF00 ) >> 8 );
+    aid_pos_check_buffer[4] = ( longitude & 0xFF0 ) >> 4;
+
+    /* Append NAV if available */
+    if( scan->detected_svs > 0 )
     {
-        /* Bypass send */
-        return false;
+        /* The number of SV max has been limited for autonomous scan in order to keep the complete buffer below 51 bytes
+         */
+        memcpy( &aid_pos_check_buffer[5], &( scan->results_buffer[GNSS_SCAN_METADATA_SIZE] ), scan->results_size );
     }
 
-    /* Get the scan index to be sent from the scan group queue */
-    if( gnss_scan_group_queue_pop( &gnss_scan_group_queue, &buffer_to_send, &buffer_to_send_size ) == true )
+    /* Send uplink */
+    if( gnss_mw_send_frame( aid_pos_check_buffer, 5 + scan->results_size, lorawan_port ) == true )
     {
-        /* Send uplink */
-        if( gnss_mw_send_frame( buffer_to_send, buffer_to_send_size ) == true )
-        {
-            success = true;
-        }
-        else
-        {
-            MW_DBG_TRACE_ERROR( "Failed to send uplink frame\n" );
-        }
+        success = true;
+    }
+    else
+    {
+        MW_DBG_TRACE_ERROR( "Failed to send aiding position request uplink frame\n" );
     }
 
     return success;
@@ -979,15 +1194,32 @@ static void gnss_mw_tx_done_callback( void )
 {
     MW_DBG_TRACE_MSG( "---- internal TX DONE ----\n" );
 
-    /* Send scan uplink if any, or trigger new scan group */
-    if( gnss_mw_send_results( ) == false )
+    /* static variables because there is no copy done by LBM for extended send API */
+    static uint8_t* buffer_to_send;
+    static uint8_t  buffer_to_send_size;
+
+    /* Get the next scan to be sent from the scan group queue */
+    if( gnss_scan_group_queue_pop( &gnss_scan_group_queue, &buffer_to_send, &buffer_to_send_size ) == true )
+    {
+        /* Send uplink */
+        if( gnss_mw_send_frame( buffer_to_send, buffer_to_send_size, lorawan_port ) == false )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to send uplink frame\n" );
+            /* TODO: send error event ? */
+        }
+        else
+        {
+            stat_nb_scans_sent_within_current_scan_group += 1;
+        }
+    }
+    else
     {
         /* Send an event to application to notify for completion */
         gnss_mw_send_event( GNSS_MW_EVENT_TERMINATED );
     }
 }
 
-static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx_frame_buffer_size )
+static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx_frame_buffer_size, uint8_t port )
 {
     smtc_modem_return_code_t modem_response_code = SMTC_MODEM_RC_OK;
     uint8_t                  tx_max_payload;
@@ -1016,7 +1248,7 @@ static bool gnss_mw_send_frame( const uint8_t* tx_frame_buffer, const uint8_t tx
 
     /* Send uplink */
     modem_response_code =
-        smtc_modem_request_extended_uplink( modem_stack_id, lorawan_port, false, tx_frame_buffer, tx_frame_buffer_size,
+        smtc_modem_request_extended_uplink( modem_stack_id, port, false, tx_frame_buffer, tx_frame_buffer_size,
                                             SMTC_MODEM_EXTENDED_UPLINK_ID_GNSS, &gnss_mw_tx_done_callback );
     if( modem_response_code == SMTC_MODEM_RC_OK )
     {
@@ -1051,6 +1283,16 @@ static void gnss_mw_send_event( gnss_mw_event_type_t event_type )
     /* Send the event to the application */
     pending_events = pending_events | ( 1 << event_type );
     MW_ASSERT_SMTC_MODEM_RC( smtc_modem_increment_event_middleware( SMTC_MODEM_EVENT_MIDDLEWARE_1, pending_events ) );
+}
+
+static void gnss_mw_set_solver_aiding_position( const uint8_t* payload, uint8_t size )
+{
+    /* Store the solver assistance position to be written to the LR11xx on the next scan */
+    memcpy( solver_aiding_position_update, payload, SOLVER_AIDING_POSITION_SIZE );
+    solver_aiding_position_update_received = true;
+
+    /* We can switch to assisted scan for the next scan */
+    current_scan_type = GNSS_MW_SCAN_TYPE_ASSISTED;
 }
 
 /* --- EOF ------------------------------------------------------------------ */

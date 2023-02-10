@@ -74,6 +74,18 @@ typedef enum
     SMTC_GNSS_GET_RESULTS_ERROR_UNKNOWN       //!< Unkown error
 } smtc_gnss_get_results_return_code_t;
 
+/**
+ * @brief GNSS scan configuration parameters
+ */
+typedef struct
+{
+    bool                             assisted;           //!< assisted or autonomous scan
+    lr11xx_gnss_constellation_mask_t constellations;     //!< constellations to be used
+    uint8_t                          input_parameters;   //!< scan in put parameters
+    lr11xx_gnss_freq_search_space_t  freq_search_space;  //!< frequency search space
+    uint8_t                          nb_svs_max;         //!< maximum number of Space Vehicles to be detected
+} smtc_gnss_scan_params_t;
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------
@@ -116,13 +128,11 @@ bool smtc_gnss_get_almanac_crc( const void* radio_context, uint32_t* almanac_crc
  *
  * @param [in] radio_context Chip implementation context
  * @param [in] date Date to use for GNSS scan operation
- * @param [in] assisted Indicate if autonomous (if value is false) or assisted (if value is true) scan is requested
- * @param [in] constellations Mask of the constellations to be used for the scan
- *
+ * @param [in] params Pointer to the scan parameters to be used
+
  * @return a boolean: true for success, false otherwise
  */
-bool smtc_gnss_scan( const void* radio_context, uint32_t date, bool assisted,
-                     lr11xx_gnss_constellation_mask_t constellations );
+bool smtc_gnss_scan( const void* radio_context, uint32_t date, const smtc_gnss_scan_params_t* params );
 
 /*!
  * @brief Execute tear down actions when GNSS scan operation is terminated
@@ -140,7 +150,7 @@ void smtc_gnss_scan_ended( void );
  * @return get results return code as defined in @ref smtc_gnss_get_results_return_code_t
  */
 smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* radio_context, const uint8_t results_max_size,
-                                                           uint8_t* res_sz, uint8_t* results );
+                                                           uint8_t* res_sz, uint8_t* results, bool* no_sv_detected );
 
 /*!
  * @brief Get detailed info of detected SVs
@@ -155,6 +165,27 @@ smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* radio_con
  */
 bool smtc_gnss_get_sv_info( const void* radio_context, const uint8_t sv_info_max_size, uint8_t* nb_detected_sv,
                             lr11xx_gnss_detected_satellite_t* sv_info );
+
+/*!
+ * @brief TODO
+ */
+bool smtc_gnss_get_almanac_update_status( const void* radio_context, const uint32_t date,
+                                          const lr11xx_gnss_solver_assistance_position_t* assistance_position,
+                                          const lr11xx_gnss_constellation_mask_t          constellations,
+                                          bool*                                           almanacs_update_required );
+
+/*!
+ * @brief TODO
+ */
+bool smtc_gnss_get_doppler_error_from_nav( const uint8_t* nav );
+
+/*!
+ * @brief TODO
+ */
+bool smtc_gnss_get_doppler_error( const void* radio_context, const uint32_t date,
+                                  const lr11xx_gnss_solver_assistance_position_t* assistance_position,
+                                  const lr11xx_gnss_constellation_mask_t constellations, const uint8_t nb_detected_sv,
+                                  const lr11xx_gnss_detected_satellite_t* detected_sv_info, bool* doppler_error );
 
 /*!
  * @brief Get the power consumption of the last scan

@@ -68,6 +68,7 @@ BUILD_DIR = ./build
 C_SOURCES +=  \
 ../main_$(APP).c \
 $(TOP_DIR)/geolocation_middleware/common/mw_common.c \
+$(TOP_DIR)/geolocation_middleware/gnss/src/lr11xx_driver_extension.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_helpers.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_queue.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_middleware.c \

@@ -94,8 +94,6 @@ bool smtc_wifi_start_scan( const void* radio_context )
 {
     lr11xx_status_t status;
 
-    MW_DBG_TRACE_INFO( "start Wi-Fi scan\n" );
-
     if( mw_radio_configure_for_scan( radio_context ) == true )
     {
         status =

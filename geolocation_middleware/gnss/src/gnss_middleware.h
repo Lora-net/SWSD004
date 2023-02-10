@@ -94,14 +94,14 @@ typedef enum
  */
 typedef enum
 {
-    GNSS_MW_EVENT_SCAN_CANCELLED       = 0,  //!< The scan operation has been cancelled
-    GNSS_MW_EVENT_SCAN_DONE            = 1,  //!< The scan operation has been completed
-    GNSS_MW_EVENT_TERMINATED           = 2,  //!< The scan & send sequence has been completed
-    GNSS_MW_EVENT_ERROR_NO_TIME        = 3,  //!< The scan operation has failed because no time is available
-    GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE = 4,  //!< The scan operation has failed because the almanac needs to be updated
+    GNSS_MW_EVENT_SCAN_CANCELLED       = 0,  //!< Scan operation has been cancelled
+    GNSS_MW_EVENT_SCAN_DONE            = 1,  //!< Scan operation has been completed
+    GNSS_MW_EVENT_TERMINATED           = 2,  //!< Scan & send sequence has been completed
+    GNSS_MW_EVENT_ERROR_NO_TIME        = 3,  //!< Scan operation has failed because no time is available
+    GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE = 4,  //!< Scan operation has failed because the almanac needs to be updated
     GNSS_MW_EVENT_ERROR_NO_AIDING_POSITION =
-        5,  //!< The scan operation has failed because the assistance position is not configured
-    GNSS_MW_EVENT_ERROR_UNKNOWN = 6,  //!< The scan operation has failed for an unknown reason
+        5,                            //!< Scan operation has failed because the assistance position is not configured
+    GNSS_MW_EVENT_ERROR_UNKNOWN = 6,  //!< Scan operation has failed for an unknown reason
     /* 8 event types max */
 } gnss_mw_event_type_t;
 
@@ -110,20 +110,23 @@ typedef enum
  */
 typedef struct
 {
-    gnss_mw_mode_t mode;                       //!< The scan mode that has been used (STATIC, MOBILE...)
-    bool           assisted;                   //!< The scan was an autonomous scan or an assisted scan
-    float          aiding_position_latitude;   //!< The aiding position latitude used for the assisted scan
-    float          aiding_position_longitude;  //!< The aiding position longitude used for the assisted scan
-    uint32_t       almanac_crc;                //!< The almanac CRC when scan was performed
+    gnss_mw_mode_t mode;                       //!< Scan mode that has been used (STATIC, MOBILE...)
+    bool           assisted;                   //!< Was it an an autonomous scan or an assisted scan ?
+    float          aiding_position_latitude;   //!< Aiding position latitude used for the assisted scan
+    float          aiding_position_longitude;  //!< Aiding position longitude used for the assisted scan
+    uint32_t       almanac_crc;                //!< Almanac CRC when scan was performed
+    uint32_t       gps_time;                   //!< GPS time when the scan was launched
+    bool almanac_update_checked;   //!< Has the almanac update status been already checked for this scan group ?
+    bool almanac_update_required;  //!< Does the almanac requires to be updated ?
 } gnss_mw_scan_context_t;
 
 /**
- * @brief Information about detected satellite (Space Vehicule).
+ * @brief Information about detected satellite (Space Vehicle).
  */
 typedef struct
 {
-    uint8_t sv_id;  //!< The ID of the space vehicule detected while scanning
-    int8_t  cnr;    //!< The Carrier to Noise Ratio at which the Space Vehicule has been detected
+    uint8_t sv_id;  //!< ID of the space vehicle detected while scanning
+    int8_t  cnr;    //!< Carrier to Noise Ratio at which the Space Vehicle has been detected
 } gnss_mw_sv_info_t;
 
 /**
@@ -157,7 +160,9 @@ typedef struct
  */
 typedef struct
 {
-    uint8_t nb_scans_sent;  //!< The number of scans which have been sent over the air.
+    uint8_t nb_scans_sent;               //!< Number of scans which have been sent over the air
+    bool    aiding_position_check_sent;  //!< Indicates if an aiding position check uplink has been sent
+    bool    indoor_detected;  //!< Indicates if an indoor detection occurred (in case aiding position check was enabled)
 } gnss_mw_event_data_terminated_t;
 
 /*
@@ -199,18 +204,6 @@ mw_return_code_t gnss_mw_init( ralf_t* modem_radio, uint8_t stack_id );
  * @retval MW_RC_FAILED     The modem/radio interface is not initialized
  */
 mw_return_code_t gnss_mw_set_user_aiding_position( float latitude, float longitude );
-
-/**
- * @brief Forward the aiding position received from the solver (through a downlink)
- *
- * @param [in] payload Aiding position payload as transmitted by the solver
- * @param [in] size Size of the aiding position payload
- *
- * @return Middleware return code as defined in @ref mw_return_code_t
- * @retval MW_RC_OK         Command executed without errors
- * @retval MW_RC_FAILED     The modem/radio interface is not initialized, the payload is NULL or the size is incorrect
- */
-mw_return_code_t gnss_mw_set_solver_aiding_position( const uint8_t* payload, uint8_t size );
 
 /**
  * @brief Program a GNSS scan & send sequence to start in a given delay
@@ -286,7 +279,7 @@ void gnss_mw_set_constellations( gnss_mw_constellation_t constellations );
  *
  * @param [in] port LoRaWAN port
  *
- * By default it is set to 194 (GNSS_APP_PORT)
+ * By default it is set to 192 (GNSS_DEFAULT_UPLINK_PORT)
  */
 void gnss_mw_set_port( uint8_t port );
 
@@ -316,9 +309,21 @@ void gnss_mw_send_bypass( bool no_send );
  * @brief Print the results of the GNSS_MW_EVENT_SCAN_DONE event
  *
  * @param [in] data Scan results to be printed on the console
- *
  */
 void gnss_mw_display_results( const gnss_mw_event_data_scan_done_t* data );
+
+/**
+ * @brief Parse downlink message, and handle it if it targets the GNSS middleware.
+ *
+ * @param [in] port Port on which the downlink has been received
+ * @param [in] payload Payload of the downlink has received
+ * @param [in] size Size of the downlink payload
+ *
+ * @return Middleware return code as defined in @ref mw_return_code_t
+ * @retval MW_RC_OK         Command executed without errors
+ * @retval MW_RC_FAILED     If the given pointer is NULL or if the size is not compatible with supported messages
+ */
+mw_return_code_t gnss_mw_handle_downlink( uint8_t port, const uint8_t* payload, uint8_t size );
 
 #ifdef __cplusplus
 }

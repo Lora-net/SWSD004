@@ -64,7 +64,7 @@ extern "C" {
 /**
  * @brief Let the application autonomously set the assistance position for GNSS geolocation (default, autonomous mode)
  */
-#define MODEM_EXAMPLE_ASSISTANCE_POSITION_AUTO_DEFAULT true
+#define MODEM_EXAMPLE_ASSISTANCE_POSITION_AUTO_DEFAULT false
 
 /**
  * @brief User defined assistance position for GNSS geolocation (not used by default, autonomous mode)
@@ -81,12 +81,12 @@ extern "C" {
 /*!
  * @brief Defines the delay before starting a new GNSS scan group, value in [s].
  */
-#define GNSS_SCAN_GROUP_PERIOD_DEFAULT 30
+#define GNSS_SCAN_GROUP_PERIOD_DEFAULT 60
 
 /*!
  * @brief Defines the scan mode used for GNSS (STATIC or MOBILE).
  */
-#define GNSS_SCAN_MODE_DEFAULT GNSS_MW_MODE_STATIC
+#define GNSS_SCAN_MODE_DEFAULT GNSS_MW_MODE_MOBILE
 
 #ifndef LED_PERIOD_MS
 #define LED_PERIOD_MS LED_PERIOD_MS_DEFAULT

@@ -72,6 +72,7 @@ C_SOURCES +=  \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_helpers.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_queue.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_middleware.c \
+$(TOP_DIR)/geolocation_middleware/gnss/src/lr11xx_driver_extension.c \
 $(TOP_DIR)/geolocation_middleware/wifi/src/wifi_middleware.c \
 $(TOP_DIR)/geolocation_middleware/wifi/src/wifi_helpers.c \
 $(TOP_DIR)/geolocation_middleware/common/mw_common.c \

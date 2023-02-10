@@ -42,6 +42,7 @@
 
 #include "mw_dbg_trace.h"
 #include "gnss_queue.h"
+#include "smtc_modem_hal.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -75,17 +76,7 @@
         GNSS_QUEUE_TRACE_PRINTF( "group_size:  %d\n", queue->scan_group_size );                       \
         GNSS_QUEUE_TRACE_PRINTF( "scan_valid:  %d\n", queue->nb_scans_valid );                        \
         GNSS_QUEUE_TRACE_PRINTF( "scan_total:  %d\n", queue->nb_scans_total );                        \
-        GNSS_QUEUE_TRACE_PRINTF( "scan_sent:   %d\n", queue->nb_scans_sent );                         \
-        GNSS_QUEUE_TRACE_PRINTF( "abort:       %d\n", queue->abort );                                 \
-        if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )                                             \
-        {                                                                                             \
-            GNSS_QUEUE_TRACE_PRINTF( "mode:        DEFAULT\n" );                                      \
-            GNSS_QUEUE_TRACE_PRINTF( "min_sv:      %d\n", queue->nb_svs_threshold );                  \
-        }                                                                                             \
-        else                                                                                          \
-        {                                                                                             \
-            GNSS_QUEUE_TRACE_PRINTF( "mode:        SENSITIVITY\n" );                                  \
-        }                                                                                             \
+        GNSS_QUEUE_TRACE_PRINTF( "next_send_index:   %d\n", queue->next_send_index );                 \
         GNSS_QUEUE_TRACE_PRINTF( "power_cons:  %d uah\n", queue->power_consumption_uah );             \
         for( uint8_t i = 0; i < queue->nb_scans_valid; i++ )                                          \
         {                                                                                             \
@@ -135,7 +126,8 @@ void gnss_scan_group_queue_reset_token( gnss_scan_group_queue_t* queue )
 {
     if( queue != NULL )
     {
-        queue->token = 0x7F; /* maximum value for 7-bits token */
+        queue->token =
+            ( uint8_t ) smtc_modem_hal_get_random_nb_in_range( 2, 0x1F ); /* 5-bits token with 0x00 and 0x01 excluded */
     }
 }
 
@@ -143,34 +135,30 @@ void gnss_scan_group_queue_increment_token( gnss_scan_group_queue_t* queue )
 {
     if( queue != NULL )
     {
-        queue->token = ( queue->token + 1 ) % 0x80; /* roll-over on 7-bits */
+        queue->token = ( queue->token + 1 ) % 0x20; /* roll-over on 5-bits */
+
+        /* Exclude 0x00 and 0x01 values */
+        if( queue->token == 0 )
+        {
+            queue->token = 2;
+        }
     }
 }
 
-bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_group_size, gnss_scan_group_mode_t mode,
-                                uint8_t nb_svs_threshold )
+bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_group_size, uint8_t scan_group_stop )
 {
     if( ( queue != NULL ) && ( scan_group_size <= GNSS_SCAN_GROUP_SIZE_MAX ) )
     {
         /* queue params */
         queue->scan_group_size = scan_group_size;
-        queue->mode            = mode;
-        if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )
-        {
-            queue->nb_svs_threshold = nb_svs_threshold;
-        }
-        else
-        {
-            /* in SENSITIVITY mode, a scan is valid if there is more that 0 SV detected */
-            queue->nb_svs_threshold = 1;
-        }
+        queue->scan_group_stop = scan_group_stop;
 
         /* reset queue current status */
         queue->nb_scans_valid        = 0;
         queue->nb_scans_total        = 0;
-        queue->nb_scans_sent         = 0;
+        queue->next_send_index       = 0;
         queue->power_consumption_uah = 0;
-        queue->abort                 = false;
+        queue->stop                  = false;
 
         /* reset queue buffers */
         memset( queue->scans, 0, sizeof queue->scans );
@@ -186,13 +174,10 @@ bool gnss_scan_group_queue_new( gnss_scan_group_queue_t* queue, uint8_t scan_gro
 
 bool gnss_scan_group_queue_is_full( gnss_scan_group_queue_t* queue )
 {
-    /* Several conditions will trigger the queue to be terminated:
-        - an abort occurred because not enough SV detected (GNSS_SCAN_GROUP_MODE_DEFAULT mode)
-        - the number of scan done reached group size
-        */
     if( queue != NULL )
     {
-        return ( ( queue->abort == true ) || ( queue->nb_scans_total == queue->scan_group_size ) );
+        /* the number of scan done reached group size */
+        return ( ( queue->nb_scans_total == queue->scan_group_size ) || ( queue->stop == true ) );
     }
 
     return false;
@@ -202,22 +187,10 @@ bool gnss_scan_group_queue_is_valid( gnss_scan_group_queue_t* queue )
 {
     if( queue != NULL )
     {
-        if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )
+        if( ( ( queue->nb_scans_valid == 1 ) && ( queue->scans[0].nav_valid == true ) ) ||
+            ( queue->nb_scans_valid > 1 ) )
         {
-            /* All scans of the group have been done, and all are valid */
-            return ( queue->nb_scans_valid == queue->scan_group_size );
-        }
-        else /* GNSS_SCAN_GROUP_MODE_SENSITIVITY */
-        {
-            if( ( ( queue->nb_scans_valid == 1 ) && ( queue->scans[0].nav_valid == true ) ) ||
-                ( queue->nb_scans_valid > 1 ) )
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            return true;
         }
     }
 
@@ -229,19 +202,17 @@ void gnss_scan_group_queue_push( gnss_scan_group_queue_t* queue, gnss_scan_t* sc
     if( ( queue != NULL ) && ( scan != NULL ) )
     {
         /* Add the scan to the queue if valid */
-        if( scan->detected_svs >= ( queue->nb_svs_threshold ) ) /* nb_sv_threshold set to 1 in HIGH_SENSITIVITY mode */
+        if( scan->detected_svs > 0 )
         {
             memcpy( &( queue->scans[queue->nb_scans_valid] ), scan, sizeof( gnss_scan_t ) );
             queue->nb_scans_valid += 1;
         }
-        else
+
+        /* If a stop limit has been set and the current scan has enough detected SVs, the current scan group can be
+         * stopped and sent */
+        if( ( queue->scan_group_stop != 0 ) && ( scan->detected_svs >= queue->scan_group_stop ) )
         {
-            if( queue->mode == GNSS_SCAN_GROUP_MODE_DEFAULT )
-            {
-                /* If no enough SV detected, we abort the current scan group */
-                queue->abort = true;
-                GNSS_QUEUE_TRACE_PRINTF( "%s: scan not valid, abort scan group\n", __FUNCTION__ );
-            }
+            queue->stop = true;
         }
 
         queue->nb_scans_total += 1;
@@ -254,20 +225,21 @@ void gnss_scan_group_queue_push( gnss_scan_group_queue_t* queue, gnss_scan_t* sc
 bool gnss_scan_group_queue_pop( gnss_scan_group_queue_t* queue, uint8_t** buffer, uint8_t* buffer_size )
 {
     if( ( queue != NULL ) && gnss_scan_group_queue_is_valid( queue ) &&
-        ( queue->nb_scans_sent < queue->nb_scans_valid ) && ( queue->abort == false ) )
+        ( queue->next_send_index < queue->nb_scans_valid ) )
     {
-        const uint8_t index   = queue->nb_scans_sent;
-        const uint8_t is_last = ( queue->nb_scans_sent == ( queue->nb_scans_valid - 1 ) );
+        const uint8_t index   = queue->next_send_index;
+        const uint8_t is_last = ( queue->next_send_index == ( queue->nb_scans_valid - 1 ) );
 
         /* Set scan group metadata
-            | last NAV (1bit) | token (7bits) |
+            | last NAV (1bit) | RFU (2bits) | token (5bits) |
             - token: scan group identifier
             - last NAV: indicates if this is the last NAV message of a scan group
         */
-        queue->scans[index].results_buffer[0] = ( is_last << 7 ) | ( queue->token & 0x7F );
+        queue->scans[index].results_buffer[0] = 0;
+        queue->scans[index].results_buffer[0] = ( is_last << 7 ) | ( queue->token & 0x1F );
 
         /* Update queue info */
-        queue->nb_scans_sent += 1;
+        queue->next_send_index += 1;
 
         /* Return a pointer to the buffer to be sent, and its size */
         *buffer      = queue->scans[index].results_buffer;

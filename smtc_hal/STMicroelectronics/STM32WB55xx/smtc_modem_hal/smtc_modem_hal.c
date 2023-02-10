@@ -40,6 +40,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "ralf.h"
+
 #include "smtc_modem_hal.h"
 #include "smtc_hal.h"
 #include "smtc_board.h"
@@ -82,6 +84,11 @@
 static hal_gpio_irq_t radio_dio_irq;
 uint8_t __attribute__( ( section( ".noinit" ) ) ) saved_crashlog[CRASH_LOG_SIZE];
 volatile bool __attribute__( ( section( ".noinit" ) ) ) crashlog_available;
+
+/*!
+ * @brief Modem radio
+ */
+extern ralf_t* modem_radio;
 
 /*
  * -----------------------------------------------------------------------------
@@ -321,11 +328,14 @@ uint8_t smtc_modem_hal_get_battery_level( void )
 
 int8_t smtc_modem_hal_get_temperature( void )
 {
-    int8_t temperature;
-    hal_adc_init( );
-    temperature = hal_adc_get_temp( );
-    hal_adc_deinit( );
-    return temperature;
+    uint16_t temperature_raw     = 0;
+    float    temperature_celcius = 0;
+
+    lr11xx_system_get_temp( modem_radio->ral.context, &temperature_raw );
+    temperature_celcius = temperature_raw & 0x7FF;
+    temperature_celcius = round( ( ( ( temperature_celcius / 2047 ) * 1.35 ) - 0.7295 ) * 1000 / -1.7 + 25 );
+
+    return ( ( int8_t ) temperature_celcius );
 }
 
 uint8_t smtc_modem_hal_get_voltage( void )

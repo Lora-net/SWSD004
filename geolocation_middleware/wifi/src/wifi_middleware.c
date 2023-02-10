@@ -100,7 +100,7 @@
 /**
  * @brief LoRaWAN port used for uplinks of the WIFI scan results
  */
-#define WIFI_APP_PORT 196
+#define WIFI_DEFAULT_UPLINK_PORT 197
 
 /**
  * @brief Minimal number of detected access point in a scan result to consider the scan valid
@@ -116,6 +116,12 @@
  * @brief Size in bytes to store the RSSI of a detected WiFi Access-Point
  */
 #define WIFI_AP_RSSI_SIZE ( 1 )
+
+/**
+ * @brief Size in bytes of the payload tag to indicate frame format (as defined by LR1110 WiFi positioning protocol of
+ * LoRaCloud)
+ */
+#define WIFI_TAG_SIZE ( 1 )
 
 /**
  * @brief The LoRa Basics Modem extended uplink ID to be used for Wi-Fi uplinks (TASK_EXTENDED_2)
@@ -170,7 +176,7 @@ static wifi_scan_all_result_t wifi_results;
 /*!
  * @brief The buffer containing results to be sent over the air
  */
-static uint8_t wifi_result_buffer[( WIFI_AP_RSSI_SIZE + WIFI_AP_ADDRESS_SIZE ) * WIFI_MAX_RESULTS];
+static uint8_t wifi_result_buffer[WIFI_TAG_SIZE + ( ( WIFI_AP_RSSI_SIZE + WIFI_AP_ADDRESS_SIZE ) * WIFI_MAX_RESULTS )];
 
 /*!
  * @brief User has requested to cancel the scan that was scheduled
@@ -193,7 +199,7 @@ static bool send_bypass = false;
 /*!
  * @brief The LoRaWAN port on which WiFi scan results are sent
  */
-static uint8_t lorawan_port = WIFI_APP_PORT;
+static uint8_t lorawan_port = WIFI_DEFAULT_UPLINK_PORT;
 
 /*!
  * @brief The format of the Wi-Fi scan results to be used.
@@ -300,6 +306,12 @@ mw_return_code_t wifi_mw_scan_start( uint32_t start_delay )
     uint32_t                 time_ms;
     wifi_settings_t          wifi_settings = { 0 };
 
+    if( modem_radio_ctx == NULL )
+    {
+        MW_DBG_TRACE_ERROR( "Wi-Fi middleware not ready, cannot start scan\n" );
+        return MW_RC_FAILED;
+    }
+
     if( task_running == true )
     {
         MW_DBG_TRACE_ERROR( "Wi-Fi scan on-going. Cancel it before starting a new one\n" );
@@ -350,6 +362,12 @@ mw_return_code_t wifi_mw_scan_start( uint32_t start_delay )
 mw_return_code_t wifi_mw_scan_cancel( void )
 {
     smtc_modem_return_code_t modem_rc;
+
+    if( modem_radio_ctx == NULL )
+    {
+        MW_DBG_TRACE_ERROR( "Wi-Fi middleware not ready, no scan to cancel\n" );
+        return MW_RC_FAILED;
+    }
 
     /* The Wi-Fi scan sequence will be in running state from the moment the task
     has been started by the RP, until all the packets have been sent over the
@@ -437,7 +455,7 @@ void wifi_mw_display_results( const wifi_mw_event_data_scan_done_t* data )
         MW_DBG_TRACE_PRINTF( "SCAN_DONE info:\n" );
         MW_DBG_TRACE_PRINTF( "-- number of results: %u\n", data->nbr_results );
         MW_DBG_TRACE_PRINTF( "-- power consumption: %u uah\n", data->power_consumption_uah );
-        MW_DBG_TRACE_PRINTF( "-- Timestamp: %u\n", data->timestamp );
+        MW_DBG_TRACE_PRINTF( "-- timestamp: %u\n", data->timestamp );
 
         for( uint8_t i = 0; i < data->nbr_results; i++ )
         {
@@ -449,7 +467,6 @@ void wifi_mw_display_results( const wifi_mw_event_data_scan_done_t* data )
             MW_DBG_TRACE_PRINTF( " -- Type: %d", data->results[i].type );
             MW_DBG_TRACE_PRINTF( " -- RSSI: %d\n", data->results[i].rssi );
         }
-        MW_DBG_TRACE_PRINTF( "\n" );
     }
 }
 
@@ -613,12 +630,9 @@ void wifi_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
         wifi_mw_send_event( WIFI_MW_EVENT_ERROR_UNKNOWN );
     }
 
-    /* Check if callback exec duration is not too long */
+    /* Monitor callback exec duration (should be kept as low as possible) */
     meas_time = smtc_modem_hal_get_time_in_ms( );
-    if( ( meas_time - time_ms ) > 3 )
-    {
-        MW_DBG_TRACE_WARNING( "WIFI RP task - done callback duration %u ms\n", meas_time - time_ms );
-    }
+    MW_DBG_TRACE_WARNING( "WIFI RP task - done callback duration %u ms\n", meas_time - time_ms );
 
     /* Set the radio back to sleep */
     mw_radio_set_sleep( modem_radio_ctx->ral.context );
@@ -644,6 +658,10 @@ static bool wifi_mw_send_results( void )
     {
         return false;
     }
+
+    /* Add the payload format tag */
+    wifi_result_buffer[wifi_buffer_size] = payload_format;
+    wifi_buffer_size += WIFI_TAG_SIZE;
 
     /* Concatenate all results in send buffer */
     for( uint8_t i = 0; i < wifi_results.nbr_results; i++ )

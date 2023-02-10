@@ -78,11 +78,6 @@
 #define LR1120_FW_TYPE 0x02
 
 /**
- * @brief LoRaWAN port used for downlinks from the DAS/solver
- */
-#define GNSS_DAS_DOWNLINK_PORT 150
-
-/**
  * @brief Duration in second after last ALC sync response received to consider the local clock time invalid
  *
  * Set time valid for 1 day (to be fine tuned depending on board properties)
@@ -242,6 +237,7 @@ int main( void )
         .upload_done           = NULL,
         .user_radio_access     = NULL,
         .middleware_1          = on_middleware_gnss_event,
+        .middleware_2          = NULL,
     };
 
     /* Initialise the ralf_t object corresponding to the board */
@@ -404,19 +400,8 @@ static void on_modem_down_data( int8_t rssi, int8_t snr, smtc_modem_event_downda
     {
         HAL_DBG_TRACE_ARRAY( "Payload", payload, size );
 
-        /* Parse downlink */
-        if( port == GNSS_DAS_DOWNLINK_PORT )
-        {
-            if( payload[0] == 0x00 ) /* D-GNSSLOC-AIDP: Aiding Position */
-            {
-                HAL_DBG_TRACE_INFO( "Received D-GNSSLOC-AIDP solver message\n" );
-                gnss_mw_set_solver_aiding_position( payload, size );
-            }
-            else
-            {
-                HAL_DBG_TRACE_ERROR( "Unknown solver message type: 0x%02X\n", payload[0] );
-            }
-        }
+        /* Forward downlink to GNSS middleware to handle it if necessary */
+        gnss_mw_handle_downlink( port, payload, size );
     }
 }
 
@@ -424,9 +409,11 @@ static void on_modem_almanac_update( smtc_modem_event_almanac_update_status_t st
 {
     if( status == SMTC_MODEM_EVENT_ALMANAC_UPDATE_STATUS_REQUESTED )
     {
-        HAL_DBG_TRACE_INFO( "Almanac update is not completed: sending new request\n" );
+        HAL_DBG_TRACE_INFO( "Almanac update is not completed yet\n" );
+#if 0
         uint8_t dm_almanac_status = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
         ASSERT_SMTC_MODEM_RC( smtc_modem_dm_request_single_uplink( &dm_almanac_status, 1 ) );
+#endif
     }
     else
     {
@@ -446,6 +433,12 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         HAL_DBG_TRACE_INFO( "GNSS middleware event - SCAN DONE\n" );
         gnss_mw_get_event_data_scan_done( &event_data );
         gnss_mw_display_results( &event_data );
+
+        if( event_data.context.almanac_update_required )
+        {
+            uint8_t dm_almanac_status = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
+            ASSERT_SMTC_MODEM_RC( smtc_modem_dm_request_single_uplink( &dm_almanac_status, 1 ) );
+        }
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_TERMINATED ) )
@@ -459,6 +452,8 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         gnss_mw_get_event_data_terminated( &event_data );
         HAL_DBG_TRACE_PRINTF( "TERMINATED info:\n" );
         HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", event_data.nb_scans_sent );
+        HAL_DBG_TRACE_PRINTF( "-- aiding position check sent: %d\n", event_data.aiding_position_check_sent );
+        HAL_DBG_TRACE_PRINTF( "-- indoor detected: %d\n", event_data.indoor_detected );
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_SCAN_CANCELLED ) )
@@ -469,15 +464,14 @@ static void on_middleware_gnss_event( uint8_t pending_events )
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_NO_TIME ) )
     {
         HAL_DBG_TRACE_ERROR( "GNSS middleware event - ERROR NO TIME\n" );
+        ASSERT_SMTC_MODEM_RC( smtc_modem_time_trigger_sync_request( stack_id ) );
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE ) )
     {
         HAL_DBG_TRACE_ERROR( "GNSS middleware event - ALMANAC UPDATE REQUIRED\n" );
-#if 0 /* Fully rely on pre-update of the almanac, and auto update with DM over time */
         uint8_t dm_almanac_status = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
         ASSERT_SMTC_MODEM_RC( smtc_modem_dm_request_single_uplink( &dm_almanac_status, 1 ) );
-#endif
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_NO_AIDING_POSITION ) )

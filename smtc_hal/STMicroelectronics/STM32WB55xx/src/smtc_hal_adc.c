@@ -134,7 +134,7 @@ int8_t hal_adc_get_temp( void )
 
     // Internal temperature sensor needs at least 5µs to be measured properly
     // ADC is clock at 8 MHz (32Mhz / 4) so 5µs is 40 cycles --> we choose 47.5 cycles (5.93µs)
-    uint16_t adc_val     = adc_read( ADC_CHANNEL_TEMPSENSOR, ADC_SAMPLETIME_47CYCLES_5 );
+    uint16_t adc_val     = adc_read( ADC_CHANNEL_TEMPSENSOR, ADC_SAMPLETIME_247CYCLES_5 );
     int32_t  temperature = __HAL_ADC_CALC_TEMPERATURE( vref_int_mv, adc_val, ADC_RESOLUTION_12B );
 
     return ( int8_t ) temperature;

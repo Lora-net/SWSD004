@@ -693,16 +693,11 @@ static bool tracker_app_is_tracker_in_static_mode( void )
 
 static void tracker_app_parse_downlink_frame( uint8_t port, const uint8_t* payload, uint8_t size )
 {
+    /* Forward downlink to GNSS middleware to handle it if necessary */
+    gnss_mw_handle_downlink( port, payload, size );
+
     switch( port )
     {
-    case GNSS_PUSH_SOLVER_MSG_PORT:
-    {
-        HAL_DBG_TRACE_INFO( "###### ===== GNSS PUSH SOLVER MSG ==== ######\n\n" );
-
-        gnss_mw_set_solver_aiding_position( payload, size );
-
-        break;
-    }
     case TRACKER_REQUEST_MSG_PORT:
     {
         uint8_t tag           = 0;
@@ -1074,6 +1069,10 @@ static void on_modem_almanac_update( smtc_modem_event_almanac_update_status_t st
     {
         HAL_DBG_TRACE_INFO( "Almanac update is completed\n\n" );
     }
+    else
+    {
+        HAL_DBG_TRACE_INFO( "Almanac update is not completed yet\n" );
+    }
 }
 
 static void on_middleware_gnss_event( uint8_t pending_events )
@@ -1115,6 +1114,14 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         {
             tracker_store_gnss_in_internal_log( &gnss_scan_results );
         }
+
+        if( gnss_scan_results.context.almanac_update_required )
+        {
+            uint8_t dm_almanac_status = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
+
+            HAL_DBG_TRACE_MSG( "Almanac update required, require an almanac update\n" );
+            ASSERT_SMTC_MODEM_RC( smtc_modem_dm_request_single_uplink( &dm_almanac_status, 1 ) );
+        }
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_TERMINATED ) )
@@ -1122,8 +1129,10 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         int32_t duty_cycle_status_ms = 0;
 
         HAL_DBG_TRACE_INFO( "GNSS middleware event - TERMINATED\n" );
-        gnss_mw_get_event_data_terminated( &tracker_ctx.gnss_nb_scan_sent );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.gnss_nb_scan_sent.nb_scans_sent );
+        gnss_mw_get_event_data_terminated( &tracker_ctx.gnss_mw_event_data );
+        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.gnss_mw_event_data.nb_scans_sent );
+        HAL_DBG_TRACE_PRINTF( "-- aiding position check sent: %d\n",
+                              tracker_ctx.gnss_mw_event_data.aiding_position_check_sent );
 
         ASSERT_SMTC_MODEM_RC( smtc_modem_get_duty_cycle_status( &duty_cycle_status_ms ) );
         HAL_DBG_TRACE_PRINTF( "Remaining duty cycle %d ms\n", duty_cycle_status_ms );
@@ -1144,18 +1153,19 @@ static void on_middleware_gnss_event( uint8_t pending_events )
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_NO_TIME ) )
     {
         HAL_DBG_TRACE_INFO( "GNSS middleware event - ERROR NO TIME\n" );
+
         HAL_DBG_TRACE_MSG( "Trig a new sync request\n" );
         ASSERT_SMTC_MODEM_RC( smtc_modem_time_trigger_sync_request( stack_id ) );
 
         /* Force the nb_scan_sent value to 0 to launch Wi-Fi scan */
-        tracker_ctx.gnss_nb_scan_sent.nb_scans_sent = 0;
+        tracker_ctx.gnss_mw_event_data.nb_scans_sent = 0;
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE ) )
     {
-        HAL_DBG_TRACE_INFO( "GNSS middleware event - ALMANAC UPDATE REQUIRED\n" );
-
         uint8_t dm_almanac_status = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
+
+        HAL_DBG_TRACE_ERROR( "GNSS middleware event - ALMANAC UPDATE REQUIRED\n" );
         ASSERT_SMTC_MODEM_RC( smtc_modem_dm_request_single_uplink( &dm_almanac_status, 1 ) );
     }
 
@@ -1181,7 +1191,7 @@ static void on_middleware_gnss_event( uint8_t pending_events )
         tracker_ctx.accelerometer_move_history =
             ( tracker_ctx.accelerometer_move_history << 1 ) + is_accelerometer_detected_moved( );
 
-        if( ( tracker_ctx.gnss_nb_scan_sent.nb_scans_sent == 0 ) ||
+        if( ( tracker_ctx.gnss_mw_event_data.nb_scans_sent == 0 ) ||
             ( tracker_ctx.scan_priority == TRACKER_NO_PRIORITY ) )
         {
             HAL_DBG_TRACE_MSG( "Start Wi-Fi scan\n" );

@@ -55,7 +55,7 @@ extern "C" {
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
  */
-#define WIFI_MW_VERSION_MAJOR 1
+#define WIFI_MW_VERSION_MAJOR 2
 #define WIFI_MW_VERSION_MINOR 0
 #define WIFI_MW_VERSION_PATCH 0
 

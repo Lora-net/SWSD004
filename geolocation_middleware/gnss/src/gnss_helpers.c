@@ -51,10 +51,41 @@
 #include "lr11xx_system.h"
 #include "lr11xx_gnss.h"
 
+#include "lr11xx_driver_extension.h"
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE MACROS-----------------------------------------------------------
  */
+
+#define GNSS_HELPERS_FEATURE_OFF 0
+#define GNSS_HELPERS_FEATURE_ON !GNSS_HELPERS_FEATURE_OFF
+
+#ifndef GNSS_HELPERS_DBG_TRACE
+#define GNSS_HELPERS_DBG_TRACE GNSS_HELPERS_FEATURE_OFF /* Enable/Disable traces here */
+#endif
+
+#if( GNSS_HELPERS_DBG_TRACE == GNSS_HELPERS_FEATURE_ON )
+#define GNSS_HELPERS_TRACE_MSG( msg ) \
+    do                                \
+    {                                 \
+        MW_DBG_TRACE_PRINTF( msg );   \
+    } while( 0 )
+
+#define GNSS_HELPERS_TRACE_PRINTF( ... )    \
+    do                                      \
+    {                                       \
+        MW_DBG_TRACE_PRINTF( __VA_ARGS__ ); \
+    } while( 0 )
+
+#else
+#define GNSS_HELPERS_TRACE_MSG( msg )
+#define GNSS_HELPERS_TRACE_PRINTF( ... )
+#endif
+
+#define ABS( N ) ( ( N < 0 ) ? ( -N ) : ( N ) )
+
+#define GETBIT( var, bit ) ( ( ( var ) >> ( bit ) ) & 1 )
 
 /*
  * -----------------------------------------------------------------------------
@@ -81,13 +112,11 @@
  *
  * @param[in] radio_context Chip implementation context
  * @param[in] date Current date
- * @param[in] assisted Request an assisted (if true) or autonomous scan (if false)
- * @param[in] constellations Mask of the constellations to be used for the scan
- *
+ * @param[in] params Pointer to scan parameters
+
  * @return a boolean: true for success, false otherwise
  */
-static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, bool assisted,
-                       lr11xx_gnss_constellation_mask_t constellations );
+static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, const smtc_gnss_scan_params_t* params );
 
 /*!
  * @brief Parse a result buffer to determine if it is a NAV message to be sent to the solver
@@ -108,6 +137,16 @@ static inline bool gnss_is_result_to_solver( const uint8_t* buffer, uint8_t buff
  * @return a boolean: true for success, false otherwise
  */
 static inline bool gnss_is_result_to_host( const uint8_t* buffer, uint8_t buffer_length );
+
+/*!
+ * @brief Compute the median value of the given values array
+ *
+ * @param[in] n Size of the input array
+ * @param[in] x Array containing values
+ *
+ * @return an integer: the median value
+ */
+static int median( int n, int x[] );
 
 /*
  * -----------------------------------------------------------------------------
@@ -162,8 +201,7 @@ bool smtc_gnss_get_almanac_crc( const void* radio_context, uint32_t* almanac_crc
     return true;
 }
 
-bool smtc_gnss_scan( const void* radio_context, uint32_t date, bool assisted,
-                     lr11xx_gnss_constellation_mask_t constellations )
+bool smtc_gnss_scan( const void* radio_context, uint32_t date, const smtc_gnss_scan_params_t* params )
 {
     bool status;
 
@@ -174,7 +212,7 @@ bool smtc_gnss_scan( const void* radio_context, uint32_t date, bool assisted,
         mw_bsp_gnss_prescan_actions( );
 
         /* Start scan */
-        status = gnss_scan( radio_context, ( lr11xx_gnss_date_t ) date, assisted, constellations );
+        status = gnss_scan( radio_context, ( lr11xx_gnss_date_t ) date, params );
         if( status == false )
         {
             MW_DBG_TRACE_ERROR( "gnss_scan() failed\n" );
@@ -221,13 +259,14 @@ bool smtc_gnss_get_scan_context( const void* radio_context, lr11xx_gnss_solver_a
 }
 
 smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* radio_context, const uint8_t results_max_size,
-                                                           uint8_t* res_sz, uint8_t* results )
+                                                           uint8_t* res_sz, uint8_t* results, bool* no_sv_detected )
 {
     lr11xx_status_t status;
     uint16_t        result_size;
 
     /* Initialize output value, in case this function returns with an error */
-    *res_sz = 0;
+    *res_sz         = 0;
+    *no_sv_detected = false;
 
     /* Use read result API to fetch the result buffer */
     status = lr11xx_gnss_get_result_size( radio_context, &result_size );
@@ -268,6 +307,7 @@ smtc_gnss_get_results_return_code_t smtc_gnss_get_results( const void* radio_con
             case LR11XX_GNSS_HOST_NO_SATELLITE_DETECTED:
             {
                 MW_DBG_TRACE_INFO( "GNSS error: NO SATELLITE\n" );
+                *no_sv_detected = true;
                 return SMTC_GNSS_GET_RESULTS_NO_ERROR; /* not an error */
             }
             case LR11XX_GNSS_HOST_ALMANAC_IN_FLASH_TOO_OLD:
@@ -343,6 +383,335 @@ bool smtc_gnss_get_sv_info( const void* radio_context, const uint8_t sv_info_max
     {
         MW_DBG_TRACE_ERROR( "Failed to get detected satellites\n" );
         return false;
+    }
+
+    return true;
+}
+
+bool smtc_gnss_get_almanac_update_status( const void* radio_context, const uint32_t date,
+                                          const lr11xx_gnss_solver_assistance_position_t* assistance_position,
+                                          const lr11xx_gnss_constellation_mask_t          constellations,
+                                          bool*                                           almanacs_update_required )
+{
+    lr11xx_status_t                 status;
+    uint8_t                         nb_visible_gps_satellites, nb_visible_beidou_satellites;
+    lr11xx_gnss_visible_satellite_t visible_gps[12];
+    lr11xx_gnss_visible_satellite_t visible_beidou[12];
+    uint8_t                         nb_almanac_old = 0;
+
+    /* Initialize output status */
+    *almanacs_update_required = false;
+
+    /* Get visible satellites for GPS constellation */
+    if( constellations & LR11XX_GNSS_GPS_MASK )
+    {
+        status = lr11xx_gnss_get_nb_visible_satellites( radio_context, ( lr11xx_gnss_date_t ) date, assistance_position,
+                                                        LR11XX_GNSS_GPS_MASK, &nb_visible_gps_satellites );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get number of visible GPS satellites\n" );
+            return false;
+        }
+
+        status = lr11xx_gnss_get_visible_satellites( radio_context, nb_visible_gps_satellites, visible_gps );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get visible GPS satellites info\n" );
+            return false;
+        }
+
+        GNSS_HELPERS_TRACE_PRINTF( "\nVisible GPS satellites: %u\n", nb_visible_gps_satellites );
+        GNSS_HELPERS_TRACE_PRINTF( "id  | doppler    | almanac_age  \n" );
+        GNSS_HELPERS_TRACE_PRINTF( "----|------------|--------------\n" );
+        for( int i = 0; i < nb_visible_gps_satellites; i++ )
+        {
+            GNSS_HELPERS_TRACE_PRINTF( "%-3u | %-10d | %-10d\n", visible_gps[i].satellite_id, visible_gps[i].doppler,
+                                       visible_gps[i].doppler_error );
+        }
+
+        /* Get the ratio of visible GPS SVs which have almanacs up-to-date */
+        for( int i = 0; i < nb_visible_gps_satellites; i++ )
+        {
+            if( visible_gps[i].doppler_error > 250 ) /* almanac age more than 6 months old (125Hz = 3months) */
+            {
+                nb_almanac_old += 1;
+            }
+        }
+    }
+
+    /* Get visible satellites for BEIDOU constellation */
+    if( constellations & LR11XX_GNSS_BEIDOU_MASK )
+    {
+        status = lr11xx_gnss_get_nb_visible_satellites( radio_context, ( lr11xx_gnss_date_t ) date, assistance_position,
+                                                        LR11XX_GNSS_BEIDOU_MASK, &nb_visible_beidou_satellites );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get number of visible BEIDOU satellites\n" );
+            return false;
+        }
+
+        status = lr11xx_gnss_get_visible_satellites( radio_context, nb_visible_beidou_satellites, visible_beidou );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get visible BEIDOU satellites info\n" );
+            return false;
+        }
+
+        GNSS_HELPERS_TRACE_PRINTF( "\nVisible BEIDOU satellites: %u\n", nb_visible_beidou_satellites );
+        GNSS_HELPERS_TRACE_PRINTF( "id  | doppler    | almanac_age  \n" );
+        GNSS_HELPERS_TRACE_PRINTF( "----|------------|--------------\n" );
+        for( int i = 0; i < nb_visible_beidou_satellites; i++ )
+        {
+            GNSS_HELPERS_TRACE_PRINTF( "%-3u | %-10d | %-10d\n", visible_beidou[i].satellite_id,
+                                       visible_beidou[i].doppler, visible_beidou[i].doppler_error );
+        }
+
+        /* Get the ratio of visible BEIDOU SVs which have almanacs up-to-date */
+        for( int i = 0; i < nb_visible_beidou_satellites; i++ )
+        {
+            if( visible_beidou[i].doppler_error > 250 ) /* almanac age more than 8 months old (125Hz = 4months) */
+            {
+                nb_almanac_old += 1;
+            }
+        }
+    }
+
+    /* Percentage of almanac updated among visible SVs */
+    uint16_t almanacs_updated_status =
+        100 - ( nb_almanac_old * 100 / ( nb_visible_gps_satellites + nb_visible_beidou_satellites ) );
+
+    /* at least 70% of visible SVs with up-to-date almanacs are necessary to trust doppler error detection */
+    if( almanacs_updated_status < 70 )
+    {
+        *almanacs_update_required = true;
+    }
+    else
+    {
+        *almanacs_update_required = false;
+    }
+
+    GNSS_HELPERS_TRACE_PRINTF( "Almanac update status: %u%% (update_required:%d)\n", almanacs_updated_status,
+                               *almanacs_update_required );
+
+    return true;
+}
+
+bool smtc_gnss_get_doppler_error_from_nav( const uint8_t* nav )
+{
+    uint8_t bit = GETBIT( nav[0], 4 );
+    return ( bool ) bit;
+}
+
+bool smtc_gnss_get_doppler_error( const void* radio_context, const uint32_t date,
+                                  const lr11xx_gnss_solver_assistance_position_t* assistance_position,
+                                  const lr11xx_gnss_constellation_mask_t constellations, const uint8_t nb_detected_sv,
+                                  const lr11xx_gnss_detected_satellite_t* detected_sv_info, bool* doppler_error )
+{
+    lr11xx_status_t                 status;
+    uint8_t                         nb_visible_gps_satellites, nb_visible_beidou_satellites;
+    lr11xx_gnss_visible_satellite_t visible_gps[12];
+    lr11xx_gnss_visible_satellite_t visible_beidou[12];
+
+    typedef struct doppler_offset_s
+    {
+        lr11xx_gnss_satellite_id_t id;
+        int16_t                    doppler_offset;
+        int16_t                    almanac_age;
+    } doppler_offset_t;
+    doppler_offset_t doppler_offsets[GNSS_NB_SVS_MAX] = { 0 }; /* doppler offsets of detected SVs */
+
+    int doppler_offsets_for_median_size             = 0;
+    int doppler_offsets_for_median[GNSS_NB_SVS_MAX] = { 0 };
+
+    /* Initialize output status */
+    *doppler_error = false;
+
+    GNSS_HELPERS_TRACE_PRINTF( "date:%u (%.6f, %.6f)\n", date, assistance_position->latitude,
+                               assistance_position->longitude );
+
+    /* Get visible satellites for GPS constellation */
+    if( constellations & LR11XX_GNSS_GPS_MASK )
+    {
+        status = lr11xx_gnss_get_nb_visible_satellites( radio_context, ( lr11xx_gnss_date_t ) date, assistance_position,
+                                                        LR11XX_GNSS_GPS_MASK, &nb_visible_gps_satellites );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get number of visible GPS satellites\n" );
+            return false;
+        }
+
+        status = lr11xx_gnss_get_visible_satellites( radio_context, nb_visible_gps_satellites, visible_gps );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get visible GPS satellites info\n" );
+            return false;
+        }
+    }
+
+    /* Get visible satellites for BEIDOU constellation */
+    if( constellations & LR11XX_GNSS_BEIDOU_MASK )
+    {
+        status = lr11xx_gnss_get_nb_visible_satellites( radio_context, ( lr11xx_gnss_date_t ) date, assistance_position,
+                                                        LR11XX_GNSS_BEIDOU_MASK, &nb_visible_beidou_satellites );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get number of visible BEIDOU satellites\n" );
+            return false;
+        }
+
+        status = lr11xx_gnss_get_visible_satellites( radio_context, nb_visible_beidou_satellites, visible_beidou );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to get visible BEIDOU satellites info\n" );
+            return false;
+        }
+    }
+
+    /* Compute the offset between the detected doppler and the theoretical doppler of visible SVs */
+    for( int j = 0; j < nb_detected_sv; j++ )
+    {
+        /* GPS satellites */
+        if( constellations & LR11XX_GNSS_GPS_MASK )
+        {
+            for( int k = 0; k < nb_visible_gps_satellites; k++ )
+            {
+                if( detected_sv_info[j].satellite_id == visible_gps[k].satellite_id )
+                {
+                    doppler_offsets[j].id             = detected_sv_info[j].satellite_id;
+                    doppler_offsets[j].doppler_offset = detected_sv_info[j].doppler - visible_gps[k].doppler;
+                    doppler_offsets[j].almanac_age    = visible_gps[k].doppler_error;
+
+                    /* Add doppler_offset to median calculation, if almanac is up-to-date */
+                    if( doppler_offsets[j].almanac_age == 0 )
+                    {
+                        doppler_offsets_for_median[doppler_offsets_for_median_size] =
+                            ( int ) doppler_offsets[j].doppler_offset;
+                        doppler_offsets_for_median_size += 1;
+                    }
+                }
+            }
+        }
+        /* BEIDOU satellites */
+        if( constellations & LR11XX_GNSS_BEIDOU_MASK )
+        {
+            for( int k = 0; k < nb_visible_beidou_satellites; k++ )
+            {
+                if( detected_sv_info[j].satellite_id == visible_beidou[k].satellite_id )
+                {
+                    doppler_offsets[j].id             = detected_sv_info[j].satellite_id;
+                    doppler_offsets[j].doppler_offset = detected_sv_info[j].doppler - visible_beidou[k].doppler;
+                    doppler_offsets[j].almanac_age    = visible_beidou[k].doppler_error;
+
+                    /* Add doppler_offset to median calculation, if almanac is up-to-date */
+                    if( doppler_offsets[j].almanac_age == 0 )
+                    {
+                        doppler_offsets_for_median[doppler_offsets_for_median_size] =
+                            ( int ) doppler_offsets[j].doppler_offset;
+                        doppler_offsets_for_median_size += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /* Compute the median doppler offset of SVs with updated almanacs */
+    int median_offset = median( doppler_offsets_for_median_size, doppler_offsets_for_median );
+
+    /* Debug prints: TODO: add flag to disable/enable */
+    GNSS_HELPERS_TRACE_PRINTF( "\nDetected satellites: %u\n", nb_detected_sv );
+    GNSS_HELPERS_TRACE_PRINTF( "id  | doppler    | cnr\n" );
+    GNSS_HELPERS_TRACE_PRINTF( "----|------------|--------------\n" );
+    for( int i = 0; i < nb_detected_sv; i++ )
+    {
+        GNSS_HELPERS_TRACE_PRINTF( "%-3u | %-10d | %-10d\n", detected_sv_info[i].satellite_id,
+                                   detected_sv_info[i].doppler, detected_sv_info[i].cnr );
+    }
+
+    if( constellations & LR11XX_GNSS_GPS_MASK )
+    {
+        GNSS_HELPERS_TRACE_PRINTF( "\nVisible GPS satellites: %u\n", nb_visible_gps_satellites );
+        GNSS_HELPERS_TRACE_PRINTF( "id  | doppler    | almanac_age  \n" );
+        GNSS_HELPERS_TRACE_PRINTF( "----|------------|--------------\n" );
+        for( int i = 0; i < nb_visible_gps_satellites; i++ )
+        {
+            GNSS_HELPERS_TRACE_PRINTF( "%-3u | %-10d | %-10d\n", visible_gps[i].satellite_id, visible_gps[i].doppler,
+                                       visible_gps[i].doppler_error );
+        }
+    }
+
+    if( constellations & LR11XX_GNSS_BEIDOU_MASK )
+    {
+        GNSS_HELPERS_TRACE_PRINTF( "\nVisible BEIDOU satellites: %u\n", nb_visible_beidou_satellites );
+        GNSS_HELPERS_TRACE_PRINTF( "id  | doppler    | almanac_age  \n" );
+        GNSS_HELPERS_TRACE_PRINTF( "----|------------|--------------\n" );
+        for( int i = 0; i < nb_visible_beidou_satellites; i++ )
+        {
+            GNSS_HELPERS_TRACE_PRINTF( "%-3u | %-10d | %-10d\n", visible_beidou[i].satellite_id,
+                                       visible_beidou[i].doppler, visible_beidou[i].doppler_error );
+        }
+    }
+
+    /* Get the current frequency search space configuration to determine threshold for acceptable doppler offset */
+    lr11xx_gnss_freq_search_space_t freq_search_space;
+    int16_t                         offset_threshold;
+    status = lr11xx_gnss_read_freq_search_space( radio_context, &freq_search_space );
+    if( status != LR11XX_STATUS_OK )
+    {
+        MW_DBG_TRACE_ERROR( "Failed to read current freq search space\n" );
+        return false;
+    }
+    switch( freq_search_space )
+    {
+    case LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_250_HZ:
+        offset_threshold = 250;
+        break;
+    case LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_500_HZ:
+        offset_threshold = 500;
+        break;
+    case LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_1_KHZ:
+        offset_threshold = 1000;
+        break;
+    case LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_2_KHZ:
+        offset_threshold = 2000;
+        break;
+    default:
+        MW_DBG_TRACE_ERROR( "Unknown freq search space - %d\n", freq_search_space );
+        return false;
+    }
+
+    /* Check if there is at least 1 SV with doppler error (with almanac up-to-date) */
+    int16_t offset_from_median;
+    bool    doppler_error_sv;
+    bool    doppler_error_ignored;
+    GNSS_HELPERS_TRACE_PRINTF( "\nDoppler offsets (median=%d):\n", median_offset );
+    GNSS_HELPERS_TRACE_PRINTF( "id  | offset     | off-median | doppler_err\n" );
+    GNSS_HELPERS_TRACE_PRINTF( "----|------------|------------|------------\n" );
+    for( int i = 0; i < nb_detected_sv; i++ )
+    {
+        offset_from_median    = ABS( ( int16_t )( doppler_offsets[i].doppler_offset - median_offset ) );
+        doppler_error_sv      = ( offset_from_median > offset_threshold ) ? true : false;
+        doppler_error_ignored = ( doppler_offsets[i].almanac_age > 250 )
+                                    ? true
+                                    : false; /* If almanac is too old for this SV, ignore doppler detected */
+        if( doppler_error_ignored == true )
+        {
+            doppler_error_sv = false;
+        }
+        GNSS_HELPERS_TRACE_PRINTF( "%-3u | %-10d | %-10d | %d %s\n", doppler_offsets[i].id,
+                                   doppler_offsets[i].doppler_offset, offset_from_median, doppler_error_sv,
+                                   ( doppler_error_ignored == true ) ? "(IGNORED)" : "" );
+
+        if( doppler_error_sv == true )
+        {
+            /* Return doppler error status */
+            *doppler_error = true;
+            /* TODO: break here if don't want to have details for all SVs */
+        }
+    }
+
+    if( *doppler_error == true )
+    {
+        MW_DBG_TRACE_WARNING( "Doppler error detected\n" );
     }
 
     return true;
@@ -454,11 +823,9 @@ bool smtc_gnss_is_nav_message_valid( const lr11xx_gnss_constellation_mask_t cons
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
  */
 
-static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, bool assisted,
-                       lr11xx_gnss_constellation_mask_t constellations )
+static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, const smtc_gnss_scan_params_t* params )
 {
     lr11xx_status_t status = LR11XX_STATUS_ERROR;
-    uint8_t         scan_input_parameters;
 
     status =
         lr11xx_system_set_dio_irq_params( radio_context, LR11XX_SYSTEM_IRQ_GNSS_SCAN_DONE, LR11XX_SYSTEM_IRQ_NONE );
@@ -475,30 +842,39 @@ static bool gnss_scan( const void* radio_context, lr11xx_gnss_date_t date, bool 
         return false;
     }
 
-    status = lr11xx_gnss_set_constellations_to_use( radio_context, constellations );
+    status = lr11xx_gnss_set_constellations_to_use( radio_context, params->constellations );
     if( status != LR11XX_STATUS_OK )
     {
         MW_DBG_TRACE_ERROR( "Failed to set constellations\n" );
         return false;
     }
 
-    if( assisted == true )
+    if( params->assisted == true )
     {
-        scan_input_parameters = 0; /* no doppler, no bit change */
-        status = lr11xx_gnss_scan_assisted( radio_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT, scan_input_parameters,
-                                            GNSS_NB_SVS_MAX );
+        status = lr11xx_gnss_set_freq_search_space( radio_context, params->freq_search_space );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "Failed to set freq search space\n" );
+            return false;
+        }
+
+        status = lr11xx_gnss_scan_assisted( radio_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT,
+                                            params->input_parameters, params->nb_svs_max );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "[GNSS] Failed to start assisted scan\n" );
+            return false;
+        }
     }
     else
     {
-        scan_input_parameters = LR11XX_GNSS_RESULTS_DOPPLER_MASK +
-                                LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 14 dopplers max, no bit change */
         status = lr11xx_gnss_scan_autonomous( radio_context, date, LR11XX_GNSS_OPTION_BEST_EFFORT,
-                                              scan_input_parameters, GNSS_NB_SVS_MAX );
-    }
-    if( status != LR11XX_STATUS_OK )
-    {
-        MW_DBG_TRACE_ERROR( "Failed to start an assisted GNSS scan\n" );
-        return false;
+                                              params->input_parameters, params->nb_svs_max );
+        if( status != LR11XX_STATUS_OK )
+        {
+            MW_DBG_TRACE_ERROR( "[GNSS] Failed to start autonomous scan\n" );
+            return false;
+        }
     }
 
     return true;
@@ -525,6 +901,37 @@ static inline bool gnss_is_result_to_host( const uint8_t* buffer, uint8_t buffer
     else
     {
         return false;
+    }
+}
+
+static int median( int n, int x[] )
+{
+    int temp;
+    int i, j;
+    // the following two loops sort the array x in ascending order
+    for( i = 0; i < n - 1; i++ )
+    {
+        for( j = i + 1; j < n; j++ )
+        {
+            if( x[j] < x[i] )
+            {
+                // swap elements
+                temp = x[i];
+                x[i] = x[j];
+                x[j] = temp;
+            }
+        }
+    }
+
+    if( n % 2 == 0 )
+    {
+        // if there is an even number of elements, return mean of the two elements in the middle
+        return ( ( x[n / 2] + x[n / 2 - 1] ) / 2 );
+    }
+    else
+    {
+        // else return the element in the middle
+        return x[n / 2];
     }
 }
 

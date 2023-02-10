@@ -53,9 +53,8 @@ The application proposes 2 different modes for the assistance position:
 * auto: when `MODEM_EXAMPLE_ASSISTANCE_POSITION_AUTO` is set to `true`, the
 GNSS middleware will execute autonomous scans until the solver sends a
 applicative downlink with an assistance position. The application will receive
-the downlink on port `GNSS_DAS_DOWNLINK_PORT` and push the received payload to
-the GNSS middleware (see `on_modem_down_data()`). After this, the middleware
-will automatically switch to assisted scan.
+the downlink forward it to the GNSS middleware (see `on_modem_down_data()`).
+After this, the middleware will automatically switch to assisted scan.
 *WARNING*: this mode is to be used when the object has a clear sky view, as the
 sensitivity for autonomous scan is not as good as for assisted scan.
 * user defined: when `MODEM_EXAMPLE_ASSISTANCE_POSITION_AUTO` is set to false,
@@ -163,7 +162,7 @@ Two possibilities :
 * A Node-Red application server is provided in folder *apps/geolocation_application_server*.
 Refer to the readme in this folder for details about setup and usage of the
 application server.
-* Use the LoRaCloud Locator https://atk.loracloud.com/ which embed a complete integration of an application server and an associated dashboard. 
+* Use the LoRaCloud Locator https://atk.loracloud.com/ which embed a complete integration of an application server and an associated dashboard.
 
 ### ADR configuration
 

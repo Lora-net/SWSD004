@@ -81,12 +81,12 @@ typedef enum wifi_mw_event_mask_e
 } wifi_mw_event_type_t;
 
 /**
- * @brief Wi-Fi payload format.
+ * @brief Wi-Fi payload format (as defined by LR1110 WiFi positioning protocol of LoRaCloud).
  */
 typedef enum wifi_mw_payload_format_e
 {
-    WIFI_MW_PAYLOAD_MAC,       //!< Only the MAC addresses of the detected Access Points are sent
-    WIFI_MW_PAYLOAD_MAC_RSSI,  //!< Both MAC address and RSSI of detected Access Points are sent
+    WIFI_MW_PAYLOAD_MAC      = 0x00,  //!< Only the MAC addresses of the detected Access Points are sent
+    WIFI_MW_PAYLOAD_MAC_RSSI = 0x01,  //!< Both MAC address and RSSI of detected Access Points are sent
 } wifi_mw_payload_format_t;
 
 /**
@@ -195,7 +195,7 @@ void wifi_mw_clear_pending_events( void );
  *
  * @param [in] port LoRaWAN port
  *
- * By default it is set to 196 (WIFI_APP_PORT)
+ * By default it is set to 197 (WIFI_DEFAULT_UPLINK_PORT)
  */
 void wifi_mw_set_port( uint8_t port );
 
