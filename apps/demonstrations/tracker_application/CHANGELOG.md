@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.2.0] - 2023-01-23
 
 ### Change
-- Application code update according to geolocation middleware v2.0.0. see [Geolocation middleware Changelog](geolocation_middleware/CHANGELOG.md).
+- Application code update according to geolocation middleware v2.0.0. see [Geolocation middleware Changelog](../../../geolocation_middleware/CHANGELOG.md).
 
 ## [2.1.1] - 2022-11-10
 
