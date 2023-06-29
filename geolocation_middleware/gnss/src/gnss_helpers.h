@@ -167,7 +167,14 @@ bool smtc_gnss_get_sv_info( const void* radio_context, const uint8_t sv_info_max
                             lr11xx_gnss_detected_satellite_t* sv_info );
 
 /*!
- * @brief TODO
+ * @brief Check almanac update status for visible satellites
+ *
+ * @param [in] radio_context Chip implementation context
+ * @param [in] date Current GPS time
+ * @param [in] assistance_position Current aiding position
+ * @param [in] constellations GNSS constellations to be checked
+ * @param [out] almanacs_update_required Boolean that indicates if at least 70% of visible satellites have their almanac
+ * not too old (less than 6 months for GPS, less that 8 months for Beidou).
  */
 bool smtc_gnss_get_almanac_update_status( const void* radio_context, const uint32_t date,
                                           const lr11xx_gnss_solver_assistance_position_t* assistance_position,
@@ -175,12 +182,16 @@ bool smtc_gnss_get_almanac_update_status( const void* radio_context, const uint3
                                           bool*                                           almanacs_update_required );
 
 /*!
- * @brief TODO
- */
-bool smtc_gnss_get_doppler_error_from_nav( const uint8_t* nav );
-
-/*!
- * @brief TODO
+ * @brief Compute doppler error on detected satellites to detect aiding position error (to be used only of almanacs are
+ * not too old).
+ *
+ * @param [in] radio_context Chip implementation context
+ * @param [in] date Current GPS time
+ * @param [in] assistance_position Current aiding position
+ * @param [in] constellations GNSS constellations to be checked
+ * @param [in] nb_detected_sv Number of detected satellites
+ * @param [in] detected_sv_info Detected satellites information
+ * @param [out] doppler_error Boolean that indicates if doppler error has been detected.
  */
 bool smtc_gnss_get_doppler_error( const void* radio_context, const uint32_t date,
                                   const lr11xx_gnss_solver_assistance_position_t* assistance_position,

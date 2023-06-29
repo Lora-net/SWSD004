@@ -73,9 +73,9 @@
 /**
  * @brief LR11XX radio firmware
  */
-#define LR1110_FW_VERSION 0x0307
+#define LR1110_FW_VERSION 0x0308
 #define LR1110_FW_TYPE 0x01
-#define LR1120_FW_VERSION 0x0101
+#define LR1120_FW_VERSION 0x0102
 #define LR1120_FW_TYPE 0x02
 
 /*
@@ -324,8 +324,7 @@ static void on_middleware_wifi_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "Wi-Fi middleware event - TERMINATED\n" );
         wifi_mw_get_event_data_terminated( &event_data );
-        HAL_DBG_TRACE_PRINTF( "TERMINATED info:\n" );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", event_data.nb_scans_sent );
+        wifi_mw_display_terminated_results( &event_data );
     }
 
     if( wifi_mw_has_event( pending_events, WIFI_MW_EVENT_SCAN_CANCELLED ) )

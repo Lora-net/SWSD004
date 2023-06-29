@@ -56,7 +56,7 @@ extern "C" {
  * --- PUBLIC TYPES ------------------------------------------------------------
  */
 #define GNSS_MW_VERSION_MAJOR 2
-#define GNSS_MW_VERSION_MINOR 0
+#define GNSS_MW_VERSION_MINOR 1
 #define GNSS_MW_VERSION_PATCH 0
 
 /*

@@ -118,12 +118,12 @@
 #define SMTC_MODEM_EXTENDED_UPLINK_ID_GNSS 1
 
 /**
- * @brief TODO
+ * @brief GNSS latitude scaling factor
  */
 #define LR11XX_GNSS_SCALING_LATITUDE 90
 
 /**
- * @brief TODO
+ * @brief GNSS longitude scaling factor
  */
 #define LR11XX_GNSS_SCALING_LONGITUDE 180
 
@@ -154,7 +154,7 @@ typedef struct
 } gnss_mw_mode_desc_t;
 
 /**
- * @brief TODO
+ * @brief The list of possible scan types
  */
 typedef enum
 {
@@ -207,7 +207,7 @@ static bool solver_aiding_position_update_received = false;
 static uint8_t solver_aiding_position_update[SOLVER_AIDING_POSITION_SIZE];
 
 /*!
- * @brief TODO
+ * @brief The current scan type selected
  */
 static gnss_mw_scan_type_t current_scan_type = GNSS_MW_SCAN_TYPE_AUTONOMOUS;
 
@@ -253,6 +253,8 @@ static uint8_t lorawan_port = GNSS_DEFAULT_UPLINK_PORT;
  */
 static bool scan_aggregate = false;
 
+static int nb_scan_aggregate = 0;
+
 /*!
  * @brief Indicates sequence to "scan & send" or "scan only" mode
  */
@@ -276,21 +278,31 @@ static bool task_running = false;
 static gnss_mw_scan_context_t lr11xx_scan_context;
 
 /*!
- * @brief TODO
+ * @brief The current Aiding Position Check (APC) message
  */
 static uint8_t aid_pos_check_buffer[5 + GNSS_RESULT_SIZE_MAX_MODE3] = { 0 }; /* | TAG | 0x00 | LAT/LON | NAV | */
 
 /*!
- * @brief TODO
+ * @brief The size of the current Aiding Position Check (APC) message
+ */
+static uint8_t aid_pos_check_size;
+
+/*!
+ * @brief Statistics variables
  */
 static uint8_t stat_nb_scans_sent_within_current_scan_group = 0;
 static bool    stat_aiding_position_check_sent              = false;
 static bool    stat_indoor_detected                         = false;
 
 /*!
- * @brief TODO
+ * @brief Flag to indicate if an autonomous scan for indoor check was launched
  */
 static bool autonomous_scan_for_indoor_check = false;
+
+/*!
+ * @brief GNSS scan results storage
+ */
+static gnss_scan_t scan_results;
 
 /*
  * -----------------------------------------------------------------------------
@@ -307,7 +319,7 @@ static bool autonomous_scan_for_indoor_check = false;
 static smtc_modem_return_code_t gnss_mw_scan_next( uint32_t delay_s );
 
 /*!
- * @brief TODO
+ * @brief Get next scan delay
  */
 static uint32_t gnss_mw_get_next_scan_delay( void );
 
@@ -332,11 +344,11 @@ static void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status );
  * update if necessary.
  *
  * @param [in] current_assistance_position The current aiding position configured
+ * @param [in] scan The scan result to be appended with APC message (if any)
  *
- * @return a boolean set to true for success, false otherwise
  */
-static bool gnss_mw_send_aiding_position_check_request(
-    const lr11xx_gnss_solver_assistance_position_t* current_assistance_position, gnss_scan_t* scan );
+static void gnss_mw_prepare_apc_msg( const lr11xx_gnss_solver_assistance_position_t* current_assistance_position,
+                                     gnss_scan_t*                                    scan );
 
 /*!
  * @brief Callback called by the LBM when the uplink has been sent. Pop the next result ot be sent until the scan group
@@ -453,6 +465,9 @@ mw_return_code_t gnss_mw_scan_start( gnss_mw_mode_t mode, uint32_t start_delay )
     stat_nb_scans_sent_within_current_scan_group = 0;
     stat_aiding_position_check_sent              = false;
     stat_indoor_detected                         = false;
+
+    /* Reset APC message */
+    aid_pos_check_size = 0;
 
     /* Switch back to assisted if previous scan was for aiding position request */
     if( current_scan_type == GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION )
@@ -584,6 +599,9 @@ mw_return_code_t gnss_mw_get_event_data_scan_done( gnss_mw_event_data_scan_done_
         data->context.aiding_position_longitude = lr11xx_scan_context.aiding_position_longitude;
         data->context.almanac_crc               = lr11xx_scan_context.almanac_crc;
         data->context.almanac_update_required   = lr11xx_scan_context.almanac_update_required;
+        data->indoor_detected                   = stat_indoor_detected;
+        data->aiding_position_check_size        = aid_pos_check_size;
+        data->aiding_position_check_msg         = aid_pos_check_buffer;
 
         return MW_RC_OK;
     }
@@ -610,7 +628,10 @@ void gnss_mw_set_constellations( gnss_mw_constellation_t constellations )
     }
 }
 
-void gnss_mw_set_port( uint8_t port ) { lorawan_port = port; }
+void gnss_mw_set_port( uint8_t port )
+{
+    lorawan_port = port;
+}
 
 void gnss_mw_scan_aggregate( bool aggregate )
 {
@@ -618,6 +639,11 @@ void gnss_mw_scan_aggregate( bool aggregate )
 
     /* Set scan aggregation current mode */
     scan_aggregate = aggregate;
+
+    if( aggregate == false )
+    {
+        nb_scan_aggregate = 0;
+    }
 }
 
 void gnss_mw_send_bypass( bool no_send )
@@ -663,6 +689,26 @@ void gnss_mw_display_results( const gnss_mw_event_data_scan_done_t* data )
         }
         MW_DBG_TRACE_PRINTF( "-- almanac CRC: 0X%08X\n", data->context.almanac_crc );
         MW_DBG_TRACE_PRINTF( "-- almanac update required: %d\n", data->context.almanac_update_required );
+        MW_DBG_TRACE_PRINTF( "-- indoor detected: %d\n", data->indoor_detected );
+        if( data->aiding_position_check_size > 0 )
+        {
+            MW_DBG_TRACE_PRINTF( "-- APC (%u): ", data->aiding_position_check_size );
+            for( i = 0; i < data->aiding_position_check_size; i++ )
+            {
+                MW_DBG_TRACE_PRINTF( "%02X", data->aiding_position_check_msg[i] );
+            }
+            MW_DBG_TRACE_PRINTF( "\n" );
+        }
+    }
+}
+
+void gnss_mw_display_terminated_results( const gnss_mw_event_data_terminated_t* data )
+{
+    if( data != NULL )
+    {
+        MW_DBG_TRACE_PRINTF( "TERMINATED info:\n" );
+        MW_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", data->nb_scans_sent );
+        MW_DBG_TRACE_PRINTF( "-- APC message sent: %d\n", data->aiding_position_check_sent );
     }
 }
 
@@ -678,7 +724,6 @@ mw_return_code_t gnss_mw_get_event_data_terminated( gnss_mw_event_data_terminate
     {
         data->nb_scans_sent              = stat_nb_scans_sent_within_current_scan_group;
         data->aiding_position_check_sent = stat_aiding_position_check_sent;
-        data->indoor_detected            = stat_indoor_detected;
         return MW_RC_OK;
     }
     else
@@ -688,7 +733,10 @@ mw_return_code_t gnss_mw_get_event_data_terminated( gnss_mw_event_data_terminate
     }
 }
 
-void gnss_mw_clear_pending_events( void ) { pending_events = 0; }
+void gnss_mw_clear_pending_events( void )
+{
+    pending_events = 0;
+}
 
 mw_return_code_t gnss_mw_handle_downlink( uint8_t port, const uint8_t* payload, uint8_t size )
 {
@@ -834,24 +882,20 @@ static void gnss_mw_scan_rp_task_launch( void* context )
         case GNSS_MW_SCAN_TYPE_AUTONOMOUS:
             scan_params.assisted          = false;
             scan_params.freq_search_space = LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_250_HZ; /* not used */
-            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_MASK +
-                                           LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 14 dopplers max, no bit change */
-            scan_params.nb_svs_max =
-                9; /* NAV2: 9 SV + 9 dopplers => 44 bytes (reduce nb SV to keep space for APC message)*/
+            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 7 dopplers max, no bit change */
+            scan_params.nb_svs_max        = GNSS_NB_SVS_MAX;
             break;
         case GNSS_MW_SCAN_TYPE_ASSISTED:
             scan_params.assisted          = true;
             scan_params.freq_search_space = LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_250_HZ;
-            scan_params.input_parameters  = 0; /* no dopplers, no bit change */
+            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 7 dopplers max, no bit change */
             scan_params.nb_svs_max        = GNSS_NB_SVS_MAX;
             break;
         case GNSS_MW_SCAN_TYPE_ASSISTED_FOR_AIDING_POSITION:
             scan_params.assisted          = true;
             scan_params.freq_search_space = LR11XX_GNSS_FREQUENCY_SEARCH_SPACE_2_KHZ;
-            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_MASK +
-                                           LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 14 dopplers max, no bit change */
-            scan_params.nb_svs_max =
-                9; /* NAV2: 9 SV + 9 dopplers => 47 bytes (reduce nb SV to keep payload under 50 bytes) */
+            scan_params.input_parameters  = LR11XX_GNSS_RESULTS_DOPPLER_ENABLE_MASK; /* 7 dopplers max, no bit change */
+            scan_params.nb_svs_max        = GNSS_NB_SVS_MAX;
             break;
         default:
             break;
@@ -961,7 +1005,6 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     }
     else if( irq_status == SMTC_RP_RADIO_GNSS_SCAN_DONE )
     {
-        gnss_scan_t                              scan_results = { 0 };
         smtc_gnss_get_results_return_code_t      scan_results_rc;
         bool                                     scan_results_no_sv      = false;
         bool                                     doppler_error           = false;
@@ -972,6 +1015,7 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
         current_assistance_position.longitude = lr11xx_scan_context.aiding_position_longitude;
 
         /* Get scan results from LR1110 */
+        memset( &scan_results, 0, sizeof scan_results );
         scan_results.timestamp = mw_get_gps_time( );
         scan_results_rc =
             smtc_gnss_get_results( modem_radio_ctx->ral.context, GNSS_RESULT_SIZE_MAX_MODE3, &scan_results.results_size,
@@ -997,14 +1041,34 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
                 {
                     /* If NO SATELLITES has been detected, we consider the device is indoor */
                     stat_indoor_detected = true;
+                    gnss_mw_send_event( GNSS_MW_EVENT_SCAN_DONE );
                     gnss_mw_send_event( GNSS_MW_EVENT_TERMINATED );
                 }
                 else
                 {
-                    /* The autonomous scan detected some SVs but not enough to generate a NAV, so send an aiding
-                     * position check uplink */
-                    stat_aiding_position_check_sent = true;
-                    gnss_mw_send_aiding_position_check_request( &current_assistance_position, &scan_results );
+                    /* Prepare APC message */
+                    gnss_mw_prepare_apc_msg( &current_assistance_position, &scan_results );
+
+                    /* Send an event to application for scan results */
+                    gnss_mw_send_event( GNSS_MW_EVENT_SCAN_DONE );
+
+                    if( send_bypass == true )
+                    {
+                        /* Send an event to application to notify for completion */
+                        gnss_mw_send_event( GNSS_MW_EVENT_TERMINATED );
+                    }
+                    else
+                    {
+                        /* Send uplink */
+                        if( gnss_mw_send_frame( aid_pos_check_buffer, aid_pos_check_size, lorawan_port ) == false )
+                        {
+                            MW_DBG_TRACE_ERROR( "Failed to send uplink for APC frame\n" );
+                        }
+                        else
+                        {
+                            stat_aiding_position_check_sent = true;
+                        }
+                    }
                 }
             }
             else
@@ -1024,10 +1088,9 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
                 if( ( scan_results.detected_svs > 0 ) && ( current_scan_type != GNSS_MW_SCAN_TYPE_AUTONOMOUS ) &&
                     ( lr11xx_scan_context.almanac_update_required == false ) )
                 {
-                    smtc_gnss_get_doppler_error(
-                        modem_radio_ctx->ral.context, lr11xx_scan_context.gps_time, &current_assistance_position,
-                        current_constellations, scan_results.detected_svs, scan_results.info_svs,
-                        &doppler_error ); /* TODO: need to add constellations to scan context */
+                    smtc_gnss_get_doppler_error( modem_radio_ctx->ral.context, lr11xx_scan_context.gps_time,
+                                                 &current_assistance_position, current_constellations,
+                                                 scan_results.detected_svs, scan_results.info_svs, &doppler_error );
                 }
 
                 if( ( doppler_error == true ) &&
@@ -1065,8 +1128,27 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
                     }
                     else
                     {
-                        /* All scans in the group have been completed, send an event to application */
-                        gnss_mw_send_event( GNSS_MW_EVENT_SCAN_DONE );
+                        /* Increment scan group token if valid and not aggregated */
+                        if( gnss_scan_group_queue_is_valid( &gnss_scan_group_queue ) )
+                        {
+                            if( scan_aggregate == false )
+                            {
+                                gnss_scan_group_queue_increment_token( &gnss_scan_group_queue );
+                            }
+                            else
+                            {
+                                /* Increment token for the first group of the aggregated groups */
+                                if( nb_scan_aggregate == 0 )
+                                {
+                                    gnss_scan_group_queue_increment_token( &gnss_scan_group_queue );
+                                    nb_scan_aggregate += 1;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            MW_DBG_TRACE_PRINTF( "Scan group is not valid, do not increment token\n" );
+                        }
 
                         /* Send results */
                         /* static variables because there is no copy done by LBM for extended send API */
@@ -1081,11 +1163,12 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
                              * position check */
                             autonomous_scan_for_indoor_check = true;
                             MW_ASSERT_SMTC_MODEM_RC( gnss_mw_scan_next( 0 ) );
-                            /* TODO: if current scan was an autonomous one, we could avoid this last one for indoor
-                             * check */
                         }
                         else
                         {
+                            /* All scans in the group have been completed, send an event to application */
+                            gnss_mw_send_event( GNSS_MW_EVENT_SCAN_DONE );
+
                             /* Check if "no send "mode" is configured */
                             if( send_bypass == true )
                             {
@@ -1152,14 +1235,14 @@ void gnss_mw_scan_rp_task_done( smtc_modem_rp_status_t* status )
     mw_radio_set_sleep( modem_radio_ctx->ral.context );
 }
 
-static bool gnss_mw_send_aiding_position_check_request(
-    const lr11xx_gnss_solver_assistance_position_t* current_assistance_position, gnss_scan_t* scan )
+static void gnss_mw_prepare_apc_msg( const lr11xx_gnss_solver_assistance_position_t* current_assistance_position,
+                                     gnss_scan_t*                                    scan )
 {
-    bool          success   = false;
     const int16_t latitude  = ( ( current_assistance_position->latitude * 2048 ) / LR11XX_GNSS_SCALING_LATITUDE );
     const int16_t longitude = ( ( current_assistance_position->longitude * 2048 ) / LR11XX_GNSS_SCALING_LONGITUDE );
 
-    /* Prepare buffer for request */
+    /* Prepare buffer for APC message */
+    aid_pos_check_size = 5;
     /* | TAG (8b) | 0x00 | LatLSB (8b) | LonLSB (4b) LatMSB (4b) | LonMSB (8b) | */
     aid_pos_check_buffer[0] = ( scan->detected_svs > 0 ) ? 0x01 : 0x00; /* TAG */
     aid_pos_check_buffer[1] = 0x00;                                     /* Extension marker */
@@ -1175,19 +1258,8 @@ static bool gnss_mw_send_aiding_position_check_request(
         /* The number of SV max has been limited for autonomous scan in order to keep the complete buffer below 51 bytes
          */
         memcpy( &aid_pos_check_buffer[5], &( scan->results_buffer[GNSS_SCAN_METADATA_SIZE] ), scan->results_size );
+        aid_pos_check_size += scan->results_size;
     }
-
-    /* Send uplink */
-    if( gnss_mw_send_frame( aid_pos_check_buffer, 5 + scan->results_size, lorawan_port ) == true )
-    {
-        success = true;
-    }
-    else
-    {
-        MW_DBG_TRACE_ERROR( "Failed to send aiding position request uplink frame\n" );
-    }
-
-    return success;
 }
 
 static void gnss_mw_tx_done_callback( void )
@@ -1269,15 +1341,6 @@ static void gnss_mw_send_event( gnss_mw_event_type_t event_type )
     if( event_type != GNSS_MW_EVENT_SCAN_DONE )
     {
         task_running = false;
-    }
-
-    /* Increment the token on SCAN_DONE if the scan group is valid (and no aggregate) */
-    if( event_type == GNSS_MW_EVENT_SCAN_DONE )
-    {
-        if( ( scan_aggregate == false ) && ( gnss_scan_group_queue_is_valid( &gnss_scan_group_queue ) ) )
-        {
-            gnss_scan_group_queue_increment_token( &gnss_scan_group_queue );
-        }
     }
 
     /* Send the event to the application */

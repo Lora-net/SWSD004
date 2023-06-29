@@ -153,6 +153,9 @@ typedef struct
     gnss_mw_event_data_scan_desc_t scans[GNSS_SCAN_GROUP_SIZE_MAX];  //!< Descriptions of all scan results
     uint32_t                       power_consumption_uah;            //!< Power consumption induced by this scan group
     gnss_mw_scan_context_t         context;                          //!< Configuration context used for this scan
+    bool indoor_detected;  //!< Indicates if an indoor detection occurred (in case aiding position check was enabled)
+    uint8_t* aiding_position_check_msg;   //!< APC message buffer
+    uint8_t  aiding_position_check_size;  //!< APC message buffer size in bytes
 } gnss_mw_event_data_scan_done_t;
 
 /**
@@ -161,8 +164,7 @@ typedef struct
 typedef struct
 {
     uint8_t nb_scans_sent;               //!< Number of scans which have been sent over the air
-    bool    aiding_position_check_sent;  //!< Indicates if an aiding position check uplink has been sent
-    bool    indoor_detected;  //!< Indicates if an indoor detection occurred (in case aiding position check was enabled)
+    bool    aiding_position_check_sent;  //!< Indicates if an APC message has been sent over the air
 } gnss_mw_event_data_terminated_t;
 
 /*
@@ -311,6 +313,13 @@ void gnss_mw_send_bypass( bool no_send );
  * @param [in] data Scan results to be printed on the console
  */
 void gnss_mw_display_results( const gnss_mw_event_data_scan_done_t* data );
+
+/**
+ * @brief Print the results of the GNSS_MW_EVENT_TERMINATED event
+ *
+ * @param [in] data Sequence results to be printed on the console
+ */
+void gnss_mw_display_terminated_results( const gnss_mw_event_data_terminated_t* data );
 
 /**
  * @brief Parse downlink message, and handle it if it targets the GNSS middleware.

@@ -1130,9 +1130,7 @@ static void on_middleware_gnss_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "GNSS middleware event - TERMINATED\n" );
         gnss_mw_get_event_data_terminated( &tracker_ctx.gnss_mw_event_data );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.gnss_mw_event_data.nb_scans_sent );
-        HAL_DBG_TRACE_PRINTF( "-- aiding position check sent: %d\n",
-                              tracker_ctx.gnss_mw_event_data.aiding_position_check_sent );
+        gnss_mw_display_terminated_results( &tracker_ctx.gnss_mw_event_data );
 
         ASSERT_SMTC_MODEM_RC( smtc_modem_get_duty_cycle_status( &duty_cycle_status_ms ) );
         HAL_DBG_TRACE_PRINTF( "Remaining duty cycle %d ms\n", duty_cycle_status_ms );
@@ -1264,7 +1262,7 @@ static void on_middleware_wifi_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "Wi-Fi middleware event - TERMINATED\n" );
         wifi_mw_get_event_data_terminated( &tracker_ctx.wifi_nb_scan_sent );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", tracker_ctx.wifi_nb_scan_sent.nb_scans_sent );
+        wifi_mw_display_terminated_results( &tracker_ctx.wifi_nb_scan_sent );
 
         ASSERT_SMTC_MODEM_RC( smtc_modem_get_duty_cycle_status( &duty_cycle_status_ms ) );
         HAL_DBG_TRACE_PRINTF( "Remaining duty cycle %d ms\n", duty_cycle_status_ms );

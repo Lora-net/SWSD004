@@ -22,6 +22,7 @@ Here is the different components changelogs and current version included in this
 | Geolocation - Wi-Fi        | Perform Wi-Fi scans and send results over LoRaWAN using Wi-Fi middleware                 | [README](apps/examples/geolocation_wifi/README.md)      |
 | Geolocation - GNSS & Wi-Fi | Perform GNSS and Wi-Fi scans and send results over LoRaWAN using geolocation middlewares | [README](apps/examples/geolocation_gnss_wifi/README.md) |
 | Full almanac update        | Perform a full almanac update                                                            | [README](apps/examples/full_almanac_update/README.md)   |
+| TX/RX continuous           | Generate a TX/RX continuous thanks to the test mode                                      | [README](apps/examples/tx_rx_continuous/README.md)      |
 
 
 ## Configuration

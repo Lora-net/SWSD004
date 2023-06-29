@@ -53,18 +53,18 @@
  */
 
 const lr11xx_system_rfswitch_cfg_t rfswitch_cfg = {
-    .enable  = LR11XX_SYSTEM_RFSW0_HIGH | LR11XX_SYSTEM_RFSW1_HIGH,
+    .enable  = LR11XX_SYSTEM_RFSW0_HIGH | LR11XX_SYSTEM_RFSW1_HIGH | LR11XX_SYSTEM_RFSW2_HIGH,
     .standby = 0,
     .rx      = LR11XX_SYSTEM_RFSW0_HIGH,
     .tx      = LR11XX_SYSTEM_RFSW0_HIGH | LR11XX_SYSTEM_RFSW1_HIGH,
     .tx_hp   = LR11XX_SYSTEM_RFSW1_HIGH,
     .tx_hf   = 0,
-    .gnss    = 0,
+    .gnss    = LR11XX_SYSTEM_RFSW2_HIGH,
     .wifi    = 0,
 };
 
 const smtc_shield_lr11xx_tcxo_cfg_t tcxo_cfg = {
-    .has_tcxo             = true,
+    .xosc_cfg             = RAL_XOSC_CFG_TCXO_RADIO_CTRL,
     .supply               = LR11XX_SYSTEM_TCXO_CTRL_3_0V,
     .startup_time_in_tick = 164,
 };
@@ -118,13 +118,13 @@ void smtc_shield_lr11xx_deinit( void )
 void smtc_shield_lr11xx_handle_pre_gnss_scan( void )
 {
     smtc_shield_lr11xx_set_led_scan( );
-    smtc_shield_lr11xx_set_lna_scan( );
+    smtc_shield_lr11xx_set_lna_scan( ); /* Not required if LNA is driven by LR11xx */
 }
 
 void smtc_shield_lr11xx_handle_post_gnss_scan( void )
 {
     smtc_shield_lr11xx_reset_led_scan( );
-    smtc_shield_lr11xx_reset_lna_scan( );
+    smtc_shield_lr11xx_reset_lna_scan( ); /* Not required if LNA is driven by LR11xx */
 }
 
 void smtc_shield_lr11xx_handle_pre_wifi_scan( void )

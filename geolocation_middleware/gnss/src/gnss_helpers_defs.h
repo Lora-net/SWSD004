@@ -56,6 +56,8 @@ extern "C" {
 
 /*!
  * @brief Maximal number of Space Vehicles to search during a GNSS scan
+ * @note Autonomous scan: NAV2: 10 SV + 7 dopplers => 44 bytes
+ * @note Assisted scan:   NAV2: 10 SV + 7 dopplers => 47 bytes
  */
 #define GNSS_NB_SVS_MAX ( 10 )
 

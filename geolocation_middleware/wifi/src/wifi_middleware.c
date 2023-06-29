@@ -436,7 +436,10 @@ mw_return_code_t wifi_mw_get_event_data_scan_done( wifi_mw_event_data_scan_done_
     }
 }
 
-void wifi_mw_set_port( uint8_t port ) { lorawan_port = port; }
+void wifi_mw_set_port( uint8_t port )
+{
+    lorawan_port = port;
+}
 
 void wifi_mw_send_bypass( bool no_send )
 {
@@ -446,7 +449,10 @@ void wifi_mw_send_bypass( bool no_send )
     send_bypass = no_send;
 }
 
-void wifi_mw_set_payload_format( wifi_mw_payload_format_t format ) { payload_format = format; }
+void wifi_mw_set_payload_format( wifi_mw_payload_format_t format )
+{
+    payload_format = format;
+}
 
 void wifi_mw_display_results( const wifi_mw_event_data_scan_done_t* data )
 {
@@ -500,7 +506,19 @@ mw_return_code_t wifi_mw_get_event_data_terminated( wifi_mw_event_data_terminate
     }
 }
 
-void wifi_mw_clear_pending_events( void ) { pending_events = 0; }
+void wifi_mw_display_terminated_results( const wifi_mw_event_data_terminated_t* data )
+{
+    if( data != NULL )
+    {
+        MW_DBG_TRACE_PRINTF( "TERMINATED info:\n" );
+        MW_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", data->nb_scans_sent );
+    }
+}
+
+void wifi_mw_clear_pending_events( void )
+{
+    pending_events = 0;
+}
 
 /*
  * -----------------------------------------------------------------------------
@@ -687,7 +705,10 @@ static bool wifi_mw_send_results( void )
     return true;
 }
 
-static void wifi_mw_reset_results( void ) { memset( &wifi_results, 0, sizeof wifi_results ); }
+static void wifi_mw_reset_results( void )
+{
+    memset( &wifi_results, 0, sizeof wifi_results );
+}
 
 static void wifi_mw_tx_done_callback( void )
 {

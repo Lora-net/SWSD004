@@ -113,8 +113,8 @@ extern "C" {
  * @brief Defines the application firmware version
  */
 #define TRACKER_MAJOR_APP_VERSION 2
-#define TRACKER_MINOR_APP_VERSION 2
-#define TRACKER_SUB_MINOR_APP_VERSION 0
+#define TRACKER_MINOR_APP_VERSION 3
+#define TRACKER_SUB_MINOR_APP_VERSION 0 
 
 #define TRACKER_PCB_HW_NUMBER 595
 #define TRACKER_MAJOR_PCB_HW_VERSION 1
@@ -123,7 +123,7 @@ extern "C" {
 /**
  * @brief LR11XX radio firmware
  */
-#define LR11XX_FW_VERSION 0x0307
+#define LR11XX_FW_VERSION 0x0308
 
 /*!
  * @brief Time during which a LED is turned on when a TX or RX event occurs, in [ms]

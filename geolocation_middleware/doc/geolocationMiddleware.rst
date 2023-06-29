@@ -39,12 +39,12 @@ The user application just has to program when the next scan needs to be launched
 GNSS middleware
 ---------------
 
+The GNSS middleware implements the `LoRa Edge GNSS-NG (NAV-Group) positioning protocol <https://www.loracloud.com/documentation/modem_services?url=mdmsvc.html#lora-edge-gnss-ng-nav-group-positioning-protocol>`_ specified by LoRaCloud.
+
 .. _GNSS scan group:
 
 Scan group (GNSS Nav-Group)
 +++++++++++++++++++++++++++
-
-------- TODO: add link to GNSS Nav-Group description of LoRaCloud --------
 
 In order to get the best accuracy from GNSS scan results, it is recommended to use the **multiframe** feature of the solver.
 
@@ -126,7 +126,7 @@ Internal choices
 In order to reach an acceptable trade-off for performances, power consumption and simplicity, some parameters have been set in the middleware, and are not configurable from the API.
 
 * A maximum of 10 Space Vehicles detected per NAV message: allow good accuracy while still being able to transmit a complete NAV message in 1 uplink (49 bytes when dopplers are enabled).
-* LR1110 scan parameters: dopplers are enabled only for autonomous scans or for aiding position update scans, so that the doppler solver can be used to get an assistance position update from LoRaCloud.
+* LR1110 scan parameters: dopplers are always enabled in NAV messages, to maximize the chances to to get an assistance position update from LoRaCloud, using the doppler solver.
 * A scan group is valid as soon as there is a valid scan in the group (with a valid NAV message).
 
 Some clarification about what is a valid scan group, a valid scan or a valid NAV message:
@@ -192,7 +192,7 @@ There are some prerequisites necessary to have a functional GNSS scan, and to ge
 
 * **time**: a valid time must be provided (ALC Sync, network clock sync...). The Modem clock sync feature from LBM is used.
 * **almanac**: the Almanac written in the LR11xx flash memory must be as up-to-date as possible. It can either be be fully updated at once, or incrementally updated through LoRaCloud Modem & Geolocation Services. The Modem almanac update feature from LBM is used.
-* **assistance position**: an assistance position must be provided to the middleware, either as a user defined assistance position, or by forwarding the downlink coming from the solver.
+* **assistance position**: an assistance position must be provided to the middleware, either as a user defined assistance position, or by forwarding downlinks coming from LoRaCloud.
 * **downlinks**: downlinks received by the user application on the port used by GNSS middleware should be transmitted to the middleware using the ``gnss_mw_handle_downlink()`` API function. It is important in order to receive an aiding position update from LoRaCloud.
 
 .. _GNSS scan results payload format:
@@ -211,12 +211,12 @@ The format is the following:
     +---------------------+--------+------------------+--------------------+
     | scan group last NAV | RFU    | scan group token | NAV message        |
     +=====================+========+==================+====================+
-    | 1 bit               | 2 bits | 5 bits           | 36 or 47 bytes max |
+    | 1 bit               | 2 bits | 5 bits           | 47 bytes max       |
     +---------------------+--------+------------------+--------------------+
 
 * scan group last NAV: indicates that this scan is the last of a scan group.
 * scan group token: it is the identifier of the current scan group. It is used to group the NAV message which should be used as a multiframe solving request.
-* NAV message: it is the GNSS scan result returned by the LR11xx radio. The actual size depends on the number of Space Vehicle detected by the scan, and if dopplers are enabled or not. For assisted scans, the maximum size is 49 bytes if dopplers are enabled, and 36 bytes otherwise.
+* NAV message: it is the GNSS scan result returned by the LR11xx radio. The actual size depends on the number of Space Vehicle detected by the scan.
 
 The maximum size of the complete payload has been kept under 51 bytes to match with the maximum payload size allowed by the LoRaWAN Regional Parameters for most regions (there are few exceptions like DR0 of the US915 region which therefore cannot be used).
 
@@ -225,7 +225,7 @@ The maximum size of the complete payload has been kept under 51 bytes to match w
 Aiding Position Check (APC) payload format
 ++++++++++++++++++++++++++++++++++++++++++
 
-When a scan group completes with no NAV message generated, the middleware will try to check if it is because the device is indoor (with an autonomous scan), or maybe because the current assistance position is too wrong to allow the assisted scan to detect anything.
+When a scan group completes with no NAV message generated, the middleware will try to check if it is because the device is indoor (with an autonomous scan), or  because the current assistance position is too wrong to allow the assisted scan to detect anything.
 If it is not indoor, the middleware will send an Aiding Position Check (APC) message to LoRaCloud, to allow LoRaCloud to compare the current aiding position configured in the end-device, with any history or context it may have to check (Wi-Fi fix, network position...).
 
 There are 2 possible formats for APC messages:
@@ -264,7 +264,7 @@ The best performances for GNSS geolocation is achieved by using the "assisted sc
 There are 2 ways to provide this assistance position:
 
 * an assistance position is given by the user at application startup.
-* no assistance position is given by the user, so the middleware starts with an "autonomous scan" and rely on the solver and the application server to return an assistance position with an applicative downlink based on the autonomous can result.
+* no assistance position is given by the user, so the middleware starts with an "autonomous scan" and rely on the solver and the application server to return an assistance position with an applicative downlink based on the autonomous scan result.
 
 Note: When using autonomous scan, the sensitivity is not optimal. A better sky view is required to detect Space Vehicles compared to assisted scan.
 So it is recommended, if possible, to set an assistance position (as accurate as possible) at startup.
@@ -324,7 +324,7 @@ Refer to the ``gnss/src/gnss_middleware.h`` file.
 Wi-Fi middleware
 ----------------
 
-The Wi-Fi middleware implements the `LoRa Edge Wi-Fi positioning protocol` specified by LoRaCloud.
+The Wi-Fi middleware implements the `LoRa Edge Wi-Fi positioning protocol <https://www.loracloud.com/documentation/modem_services?url=mdmsvc.html#lora-edge-wi-fi-positioning-protocol>`_ specified by LoRaCloud.
 
 Contrary to the GNSS middleware, there is no scan group concept in the Wi-Fi middleware, and no multiframe solving.
 A Wi-Fi scan will simply return the list of Access Points MAC address that have been detected (and optionally RSSI), and will be sent to the solver within one uplink message.
@@ -409,8 +409,6 @@ Scan results payload format
 +++++++++++++++++++++++++++
 
 The format of the payload is described by the `LoRa Edge Wi-Fi positioning protocol` of LoRaCloud.
-
-https://www.loracloud.com/documentation/modem_services?url=mdmsvc.html#lr1110-wifi-positioning-protocol
 
 There are 2 formats possible, that the user can choose:
 

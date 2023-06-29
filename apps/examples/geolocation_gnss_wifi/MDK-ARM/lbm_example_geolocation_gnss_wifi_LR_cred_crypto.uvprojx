@@ -1259,11 +1259,6 @@
               <FilePath>..\..\..\..\geolocation_middleware\gnss\src\gnss_queue.c</FilePath>
             </File>
             <File>
-              <FileName>lr11xx_driver_extension.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\geolocation_middleware\gnss\src\lr11xx_driver_extension.c</FilePath>
-            </File>
-            <File>
               <FileName>mw_common.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\geolocation_middleware\common\mw_common.c</FilePath>
@@ -2607,11 +2602,6 @@
               <FilePath>..\..\..\..\geolocation_middleware\gnss\src\gnss_queue.c</FilePath>
             </File>
             <File>
-              <FileName>lr11xx_driver_extension.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\geolocation_middleware\gnss\src\lr11xx_driver_extension.c</FilePath>
-            </File>
-            <File>
               <FileName>mw_common.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\geolocation_middleware\common\mw_common.c</FilePath>
@@ -3902,11 +3892,6 @@
               <FileName>gnss_queue.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\geolocation_middleware\gnss\src\gnss_queue.c</FilePath>
-            </File>
-            <File>
-              <FileName>lr11xx_driver_extension.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\geolocation_middleware\gnss\src\lr11xx_driver_extension.c</FilePath>
             </File>
             <File>
               <FileName>mw_common.c</FileName>
@@ -5250,11 +5235,6 @@
               <FileName>gnss_queue.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\geolocation_middleware\gnss\src\gnss_queue.c</FilePath>
-            </File>
-            <File>
-              <FileName>lr11xx_driver_extension.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\geolocation_middleware\gnss\src\lr11xx_driver_extension.c</FilePath>
             </File>
             <File>
               <FileName>mw_common.c</FileName>

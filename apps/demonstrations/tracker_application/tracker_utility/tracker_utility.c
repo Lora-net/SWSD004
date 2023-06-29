@@ -722,29 +722,50 @@ void tracker_store_gnss_in_internal_log( const gnss_mw_event_data_scan_done_t* g
         else
         {
             uint32_t timestamp = apps_modem_common_get_utc_time( );
-            if( tracker_ctx.gnss_antenna_sel == GNSS_PCB_ANTENNA )
+
+            if( gnss_scan_results->aiding_position_check_size != 0 )
             {
-                scan_buf[index++] = TAG_GNSS_PCB;
+                scan_buf[index++] = TAG_APC_MSG;
+
+                scan_buf[index++] = GNSS_TIMESTAMP_LEN + gnss_scan_results->aiding_position_check_size;
+
+                /* Scan Timestamp */
+                scan_buf[index++] = timestamp;
+                scan_buf[index++] = timestamp >> 8;
+                scan_buf[index++] = timestamp >> 16;
+                scan_buf[index++] = timestamp >> 24;
+
+                memcpy( &scan_buf[index], gnss_scan_results->aiding_position_check_msg,
+                        gnss_scan_results->aiding_position_check_size );
+                index += gnss_scan_results->aiding_position_check_size;
             }
             else
             {
-                scan_buf[index++] = TAG_GNSS_PATCH;
-            }
+                if( tracker_ctx.gnss_antenna_sel == GNSS_PCB_ANTENNA )
+                {
+                    scan_buf[index++] = TAG_GNSS_PCB;
+                }
+                else
+                {
+                    scan_buf[index++] = TAG_GNSS_PATCH;
+                }
 
-            scan_buf[index++] =
-                GNSS_TOKEN_LEN + GNSS_NB_SAT_LEN + GNSS_TIMESTAMP_LEN + GNSS_LAST_SCAN_IN_GROUP_LEN + GNSS_PROFILE_LEN;
-            /* Scan Timestamp */
-            scan_buf[index++] = timestamp;
-            scan_buf[index++] = timestamp >> 8;
-            scan_buf[index++] = timestamp >> 16;
-            scan_buf[index++] = timestamp >> 24;
-            scan_buf[index++] = 0;  // Set the token to 0 when no sv detected
-            scan_buf[index++] = 0;  // 0 SV detected
-            scan_buf[index++] = 1;  // set a default GNSS mode
-            scan_buf[index++] = gnss_scan_results->context.mode;
+                scan_buf[index++] = GNSS_TOKEN_LEN + GNSS_NB_SAT_LEN + GNSS_TIMESTAMP_LEN +
+                                    GNSS_LAST_SCAN_IN_GROUP_LEN + GNSS_PROFILE_LEN;
+                /* Scan Timestamp */
+                scan_buf[index++] = timestamp;
+                scan_buf[index++] = timestamp >> 8;
+                scan_buf[index++] = timestamp >> 16;
+                scan_buf[index++] = timestamp >> 24;
+                scan_buf[index++] = 0;  // Set the token to 0 when no sv detected
+                scan_buf[index++] = 0;  // 0 SV detected
+                scan_buf[index++] = 1;  // set a default GNSS mode
+                scan_buf[index++] = gnss_scan_results->context.mode;
+            }
 
             nb_variable_elements++;
         }
+
         tracker_store_internal_log( scan_buf, nb_variable_elements, index );
     }
 }
@@ -828,6 +849,28 @@ void tracker_restore_internal_log( void )
                 {
                     job_counter++;
                 }
+                break;
+            }
+            case TAG_APC_MSG:
+            {
+                /* Scan Timestamp */
+                scan_timestamp = get_uint32_from_array_at_index_and_inc( scan_buf, &scan_buf_index );
+                memcpy( &epoch_time, localtime( &scan_timestamp ), sizeof( struct tm ) );
+
+                uint16_t apc_len = len - GNSS_TIMESTAMP_LEN;
+
+                /* Display Raw NAV Message*/
+                HAL_DBG_TRACE_PRINTF( "[%d-%d-%d %d:%d:%d.000] ", epoch_time.tm_year + 1900, epoch_time.tm_mon + 1,
+                                      epoch_time.tm_mday, epoch_time.tm_hour, epoch_time.tm_min, epoch_time.tm_sec );
+                HAL_DBG_TRACE_PRINTF( "[%d - %d] ", job_counter, tag_element );
+
+                for( uint8_t i = 0; i < apc_len; i++ )
+                {
+                    HAL_DBG_TRACE_PRINTF( "%02X", scan_buf[scan_buf_index++] );
+                }
+
+                HAL_DBG_TRACE_PRINTF( "\n" );
+
                 break;
             }
             case TAG_WIFI:
@@ -2570,6 +2613,8 @@ static void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_
         tag_element = scan_buf[scan_buf_index++];  // get the element
         len         = scan_buf[scan_buf_index++];  // get the size element
 
+        HAL_DBG_TRACE_PRINTF( "tag_element %d len %d\n", tag_element, len );
+
         switch( tag_element )
         {
         case TAG_GNSS_PATCH:
@@ -2611,6 +2656,33 @@ static void tracker_get_one_scan_from_internal_log( uint16_t scan_number, uint8_
 
             *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
                                      ",%d,%d,%d,%d\r\n", token, last_scan, nb_sat, profile );
+
+            break;
+        }
+        case TAG_APC_MSG:
+        {
+            HAL_DBG_TRACE_PRINTF( "Restore APC\n" );
+            /* Scan Timestamp */
+            scan_timestamp = get_uint32_from_array_at_index_and_inc( scan_buf, &scan_buf_index );
+            memcpy( &epoch_time, localtime( &scan_timestamp ), sizeof( struct tm ) );
+
+            uint16_t apc_len = len - GNSS_TIMESTAMP_LEN;
+
+            /* Display Raw NAV Message*/
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                     "[%d-%d-%d %d:%d:%d.000] ", epoch_time.tm_year + 1900, epoch_time.tm_mon + 1,
+                                     epoch_time.tm_mday, epoch_time.tm_hour, epoch_time.tm_min, epoch_time.tm_sec );
+
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len,
+                                     "[%ld - %d] ", job_counter, tag_element );
+
+            for( uint16_t i = 0; i < apc_len; i++ )
+            {
+                *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "%02X",
+                                         scan_buf[scan_buf_index++] );
+            }
+
+            *buffer_len += snprintf( ( char* ) ( out_buffer + *buffer_len ), out_buffer_len - *buffer_len, "\r\n" );
 
             break;
         }

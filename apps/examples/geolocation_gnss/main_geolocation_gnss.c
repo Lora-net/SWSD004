@@ -72,9 +72,9 @@
 /**
  * @brief LR11XX radio firmware
  */
-#define LR1110_FW_VERSION 0x0307
+#define LR1110_FW_VERSION 0x0308
 #define LR1110_FW_TYPE 0x01
-#define LR1120_FW_VERSION 0x0101
+#define LR1120_FW_VERSION 0x0102
 #define LR1120_FW_TYPE 0x02
 
 /**
@@ -450,10 +450,7 @@ static void on_middleware_gnss_event( uint8_t pending_events )
 
         HAL_DBG_TRACE_INFO( "GNSS middleware event - TERMINATED\n" );
         gnss_mw_get_event_data_terminated( &event_data );
-        HAL_DBG_TRACE_PRINTF( "TERMINATED info:\n" );
-        HAL_DBG_TRACE_PRINTF( "-- number of scans sent: %u\n", event_data.nb_scans_sent );
-        HAL_DBG_TRACE_PRINTF( "-- aiding position check sent: %d\n", event_data.aiding_position_check_sent );
-        HAL_DBG_TRACE_PRINTF( "-- indoor detected: %d\n", event_data.indoor_detected );
+        gnss_mw_display_terminated_results( &event_data );
     }
 
     if( gnss_mw_has_event( pending_events, GNSS_MW_EVENT_SCAN_CANCELLED ) )

@@ -118,7 +118,7 @@ uint32_t smtc_board_get_tcxo_startup_time_in_ms( void )
 {
     const smtc_shield_lr11xx_tcxo_cfg_t cfg = smtc_shield_lr11xx_get_tcxo_cfg( );
 
-    if( cfg.has_tcxo == true )
+    if( cfg.xosc_cfg != RAL_XOSC_CFG_XTAL )
     {
         return cfg.startup_time_in_tick * 1000 / 32768;
     }

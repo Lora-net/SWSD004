@@ -45,6 +45,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "ral_lr11xx_bsp.h"
 #include "lr11xx_radio_types.h"
 #include "lr11xx_system_types.h"
 
@@ -71,7 +72,7 @@ typedef struct smtc_shield_lr11xx_pa_pwr_cfg_s
 
 typedef struct
 {
-    bool                                has_tcxo;
+    ral_xosc_cfg_t                      xosc_cfg;
     lr11xx_system_tcxo_supply_voltage_t supply;
     uint32_t                            startup_time_in_tick;
 } smtc_shield_lr11xx_tcxo_cfg_t;

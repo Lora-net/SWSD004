@@ -72,7 +72,6 @@ C_SOURCES +=  \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_helpers.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_queue.c \
 $(TOP_DIR)/geolocation_middleware/gnss/src/gnss_middleware.c \
-$(TOP_DIR)/geolocation_middleware/gnss/src/lr11xx_driver_extension.c \
 $(TOP_DIR)/geolocation_middleware/wifi/src/wifi_middleware.c \
 $(TOP_DIR)/geolocation_middleware/wifi/src/wifi_helpers.c \
 $(TOP_DIR)/geolocation_middleware/common/mw_common.c \
@@ -128,7 +127,7 @@ C_INCLUDES += \
 -I$(TOP_DIR)/geolocation_middleware/wifi/src \
 -I$(TOP_DIR)/geolocation_middleware/gnss/src \
 -I$(TOP_DIR)/geolocation_middleware/bsp \
--I$(TOP_DIR)/geolocation_middleware/common 
+-I$(TOP_DIR)/geolocation_middleware/common
 
 # Add the macro debug trace definition
 ifeq ($(MIDDLEWARE_TRACE),yes)

@@ -225,6 +225,13 @@ void wifi_mw_set_payload_format( wifi_mw_payload_format_t format );
  */
 void wifi_mw_display_results( const wifi_mw_event_data_scan_done_t* data );
 
+/**
+ * @brief Print the results of the WIFI_MW_EVENT_TERMINATED event
+ *
+ * @param [in] data Sequence results to be printed on the console
+ */
+void wifi_mw_display_terminated_results( const wifi_mw_event_data_terminated_t* data );
+
 #ifdef __cplusplus
 }
 #endif

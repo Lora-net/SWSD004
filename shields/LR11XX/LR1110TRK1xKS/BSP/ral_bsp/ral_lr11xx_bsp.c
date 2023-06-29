@@ -319,13 +319,13 @@ void ral_lr11xx_bsp_get_reg_mode( const void* context, lr11xx_system_reg_mode_t*
     *reg_mode = LR11XX_SYSTEM_REG_MODE_DCDC;
 }
 
-void ral_lr11xx_bsp_get_xosc_cfg( const void* context, bool* tcxo_is_radio_controlled,
+void ral_lr11xx_bsp_get_xosc_cfg( const void* context, ral_xosc_cfg_t* xosc_cfg,
                                   lr11xx_system_tcxo_supply_voltage_t* supply_voltage, uint32_t* startup_time_in_tick )
 {
     // Radio control TCXO 1.8V and 30 ms of startup time
-    *tcxo_is_radio_controlled = true;
-    *supply_voltage           = LR11XX_SYSTEM_TCXO_CTRL_1_8V;
-    *startup_time_in_tick     = 982;  // 30ms in 30.52µs ticks
+    *xosc_cfg             = RAL_XOSC_CFG_TCXO_RADIO_CTRL;
+    *supply_voltage       = LR11XX_SYSTEM_TCXO_CTRL_1_8V;
+    *startup_time_in_tick = 982;  // 30ms in 30.52µs ticks
 }
 
 void ral_lr11xx_bsp_get_crc_state( const void* context, bool* crc_is_activated )

@@ -64,6 +64,7 @@ extern "C" {
 #define TAG_GNSS_PATCH 0x02
 #define TAG_WIFI 0x03
 #define TAG_NEXT_SCAN 0x04
+#define TAG_APC_MSG 0x05
 
 /* Internal Log Len */
 #define WIFI_SINGLE_BEACON_LEN 0x08

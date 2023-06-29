@@ -74,6 +74,8 @@ static wifi_settings_t settings = { 0 };
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
+static lr11xx_wifi_basic_complete_result_t wifi_results_mac_addr[WIFI_MAX_RESULTS];
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
@@ -141,11 +143,12 @@ void smtc_wifi_scan_ended( void )
 
 bool smtc_wifi_get_results( const void* radio_context, wifi_scan_all_result_t* wifi_results )
 {
-    lr11xx_wifi_basic_complete_result_t wifi_results_mac_addr[WIFI_MAX_RESULTS] = { 0 };
-    uint8_t                             nb_results;
-    uint8_t                             max_nb_results;
-    uint8_t                             result_index = 0;
-    lr11xx_status_t                     status       = LR11XX_STATUS_OK;
+    uint8_t         nb_results;
+    uint8_t         max_nb_results;
+    uint8_t         result_index = 0;
+    lr11xx_status_t status       = LR11XX_STATUS_OK;
+
+    memset( wifi_results_mac_addr, 0, sizeof wifi_results_mac_addr );
 
     status = lr11xx_wifi_get_nb_results( radio_context, &nb_results );
     if( status != LR11XX_STATUS_OK )

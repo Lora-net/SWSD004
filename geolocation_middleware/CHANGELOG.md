@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.0] 2023-06-20
+
+This release comes with the latest release of LR11xx transceiver (LR1110:0x308, LR1110:0x102), which fixes an issue when generating GNSS NAV messages with dopplers enabled but in the mode '7 dopplers max'.
+Now that this issue is fixed, we can enable the dopplers in all modes, to improve aiding position update in general case.
+
+This release also provides few bugfixes as described below, and comes with a minor API changes in the public types for SCAN_DONE and TERMINATED events data.
+
+### Changed
+
+* [gnss_middleware]: Enabled dopplers (7 max) in NAV messages for all scan modes (autonomous, assisted, assisted_for_aiding_position).
+* [gnss_middleware]: Reduced stack memory usage
+* [gnss_middleware]: Changed `gnss_mw_event_data_scan_done_t` to include APC message payload and size. So that those messages can be handled by the use
+application when send_bypass mode is selected.
+* [gnss_middleware]: Moved `indoor_detected` status from `gnss_mw_event_data_terminated_t` to `gnss_mw_event_data_scan_done_t`, as it relates to a scan status.
+* [gnss_middleware]: Bugfix: Do not send APC messages over the air when send_bypass mode is selected.
+* [gnss_middleware]: Bugfix: In function `smtc_gnss_get_doppler_error()`, doppler error is not computed if there is no space vehicles (among detected ones) with almanac age 0 at all.
+* [gnss_middleware]: Removed lr11xx_driver_extension.h/c files as functions have been released with the LR11xx driver coming with LBM release v3.3.x.
+* [gnss_middleware]: Almanacs are considered to be updated when age is greater or equal to 6 months for GPS and 8 months for Beidou.
+* [gnss_middleware]: Added a new API function to print TERMINATED event info: `gnss_mw_display_terminated_results()`.
+* [wifi_middleware]: Reduced stack memory usage
+* [wifi_middleware]: Added a new API function to print TERMINATED event info: `wifi_mw_display_terminated_results()`.
+
 ## [v2.0.0] 2023-01-20
 
 This release comes along with the new `GNSS NAV-Group Protocol Specification` from LoRaCloud `Modem and Geolocation Services`, and aims to simplify end-to-end integration by removing the need for an Application Server to handle the GNSS middleware logic.

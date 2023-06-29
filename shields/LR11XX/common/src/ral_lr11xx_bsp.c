@@ -104,14 +104,14 @@ void ral_lr11xx_bsp_get_reg_mode( const void* context, lr11xx_system_reg_mode_t*
     *reg_mode = smtc_shield_lr11xx_get_reg_mode( );
 }
 
-void ral_lr11xx_bsp_get_xosc_cfg( const void* context, bool* tcxo_is_radio_controlled,
+void ral_lr11xx_bsp_get_xosc_cfg( const void* context, ral_xosc_cfg_t* xosc_cfg,
                                   lr11xx_system_tcxo_supply_voltage_t* supply_voltage, uint32_t* startup_time_in_tick )
 {
     const smtc_shield_lr11xx_tcxo_cfg_t tcxo_cfg = smtc_shield_lr11xx_get_tcxo_cfg( );
 
-    *tcxo_is_radio_controlled = tcxo_cfg.has_tcxo;
-    *supply_voltage           = tcxo_cfg.supply;
-    *startup_time_in_tick     = tcxo_cfg.startup_time_in_tick;
+    *xosc_cfg             = tcxo_cfg.xosc_cfg;
+    *supply_voltage       = tcxo_cfg.supply;
+    *startup_time_in_tick = tcxo_cfg.startup_time_in_tick;
 }
 
 void ral_lr11xx_bsp_get_crc_state( const void* context, bool* crc_is_activated )
