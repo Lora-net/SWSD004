@@ -1617,11 +1617,11 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
 
             case SET_APP_MOBILE_SCAN_INTERVAL_CMD:
             {
-                uint16_t mobile_scan_interval = 0;
+                uint32_t mobile_scan_interval = 0;
 
                 tracker_ctx.new_value_to_set = true;
 
-                mobile_scan_interval = ( uint16_t ) payload[payload_index] << 8;
+                mobile_scan_interval = ( uint32_t ) payload[payload_index] << 8;
                 mobile_scan_interval += payload[payload_index + 1];
 
                 if( ( mobile_scan_interval >= MOBILE_SCAN_INTERVAL_MIN ) &&
@@ -1632,7 +1632,7 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 else
                 {
                     /* Clip the value */
-                    if( payload[payload_index] < MOBILE_SCAN_INTERVAL_MIN )
+                    if( mobile_scan_interval < MOBILE_SCAN_INTERVAL_MIN )
                     {
                         tracker_ctx.mobile_scan_interval = MOBILE_SCAN_INTERVAL_MIN;
                     }
@@ -1666,11 +1666,11 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
 
             case SET_APP_STATIC_SCAN_INTERVAL_CMD:
             {
-                uint16_t static_scan_interval = 0;
+                uint32_t static_scan_interval = 0;
 
                 tracker_ctx.new_value_to_set = true;
 
-                static_scan_interval = ( uint16_t ) payload[payload_index] << 8;
+                static_scan_interval = ( uint32_t ) payload[payload_index] << 8;
                 static_scan_interval += payload[payload_index + 1];
                 static_scan_interval *= 60;
 
@@ -1682,7 +1682,7 @@ uint8_t tracker_parse_cmd( uint8_t stack_id, uint8_t* payload, uint8_t* buffer_o
                 else
                 {
                     /* Clip the value */
-                    if( payload[payload_index] < STATIC_SCAN_INTERVAL_MIN )
+                    if( static_scan_interval < STATIC_SCAN_INTERVAL_MIN )
                     {
                         tracker_ctx.static_scan_interval = STATIC_SCAN_INTERVAL_MIN;
                     }
