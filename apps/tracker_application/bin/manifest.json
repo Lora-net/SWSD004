@@ -9,7 +9,7 @@
   "lr1110_fa_transceiver": {
     "version": "04.01",
     "url": "https://api.github.com/repos/Lora-net/radio_firmware_images/contents/lr1110/transceiver/lr1110_transceiver_0401.h",
-    "hash": "9cf07cebd4b7163504a2999cea6cc7be"},
+    "hash": "6af451463b37b7a328fee730d4c82d3c"},
   "lbm_fa_app": {
     "version": "3.00.00",
     "url": "https://api.github.com/repos/Lora-net/SWSD004/contents/apps/tracker_application/bin/tracker_application_autonomous.bin",
