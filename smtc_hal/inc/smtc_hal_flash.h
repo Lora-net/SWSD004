@@ -127,6 +127,24 @@ uint32_t hal_flash_get_user_start_addr( void );
  */
 void hal_flash_set_user_start_addr( uint32_t addr );
 
+/*!
+ * @brief Get the FLASH page size.
+ *
+ * @returns the page size in byte
+ */
+uint16_t hal_flash_get_page_size( void );
+
+//#if defined( ALLOW_FUOTA ) || defined( MULTISTACK )
+/**
+ * @brief Reads a flash page, modify it, erase page and then write it
+ *
+ * @param [in] addr FLASH address
+ * @param [in] buffer Pointer to the buffer to be written.
+ * @param [in] size Size of the buffer to be written.
+ */
+void hal_flash_read_modify_write( uint32_t addr, const uint8_t* buffer, uint32_t size );
+//#endif  // ALLOW_FUOTA or MULTISTACK
+
 #ifdef __cplusplus
 }
 #endif

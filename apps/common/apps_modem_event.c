@@ -86,6 +86,19 @@ void apps_modem_event_process( void )
     smtc_modem_event_t       current_event;
     smtc_modem_return_code_t return_code = SMTC_MODEM_RC_OK;
     uint8_t                  event_pending_count;
+    uint8_t                  rx_payload[SMTC_MODEM_MAX_LORAWAN_PAYLOAD_LENGTH] = { 0 };  // Buffer for rx payload
+    uint8_t                  length       = 0;      // Size of the payload in the rx_payload buffer
+    smtc_modem_dl_metadata_t rx_metadata  = { 0 };  // Metadata of downlink
+    uint8_t                  rx_remaining = 0;      // Remaining downlink payload in modem
+    uint32_t                 gps_time_s;
+    uint32_t                 gps_fractional_s;
+    uint8_t                  margin;
+    uint8_t                  gw_cnt;
+    smtc_modem_gnss_event_data_scan_done_t                      gnss_scan_done_data;
+    smtc_modem_gnss_event_data_terminated_t                     gnss_terminated_data;
+    smtc_modem_wifi_event_data_scan_done_t                      wifi_scan_done_data;
+    smtc_modem_wifi_event_data_terminated_t                     wifi_terminated_data;
+    smtc_modem_almanac_demodulation_event_data_almanac_update_t almanac_demodulation_update;
 
     do
     {
@@ -100,10 +113,9 @@ void apps_modem_event_process( void )
                 {
                 case SMTC_MODEM_EVENT_RESET:
                     HAL_DBG_TRACE_INFO( "###### ===== BASICS MODEM RESET EVENT ==== ######\n" );
-                    HAL_DBG_TRACE_PRINTF( "Reset count : %lu \n", current_event.event_data.reset.count );
                     if( apps_modem_event_callback->reset != NULL )
                     {
-                        apps_modem_event_callback->reset( current_event.event_data.reset.count );
+                        apps_modem_event_callback->reset( );
                     }
                     break;
                 case SMTC_MODEM_EVENT_ALARM:
@@ -149,21 +161,20 @@ void apps_modem_event_process( void )
                     break;
                 case SMTC_MODEM_EVENT_DOWNDATA:
                     HAL_DBG_TRACE_INFO( "###### ===== DOWNLINK EVENT ==== ######\n" );
-                    HAL_DBG_TRACE_PRINTF( "Rx window: %s\n", smtc_modem_event_downdata_window_to_str(
-                                                                 current_event.event_data.downdata.window ) );
-                    HAL_DBG_TRACE_PRINTF( "Rx port: %d\n", current_event.event_data.downdata.fport );
-                    HAL_DBG_TRACE_PRINTF( "Rx RSSI: %d\n", current_event.event_data.downdata.rssi - 64 );
-                    HAL_DBG_TRACE_PRINTF( "Rx SNR: %d\n", current_event.event_data.downdata.snr / 4 );
+                    smtc_modem_get_downlink_data( rx_payload, &length, &rx_metadata, &rx_remaining );
+
+                    HAL_DBG_TRACE_PRINTF( "Rx window: %s\n",
+                                          smtc_modem_event_downdata_window_to_str( rx_metadata.window ) );
+                    HAL_DBG_TRACE_PRINTF( "Rx port: %d\n", rx_metadata.fport );
+                    HAL_DBG_TRACE_PRINTF( "Rx RSSI: %d\n", rx_metadata.rssi - 64 );
+                    HAL_DBG_TRACE_PRINTF( "Rx SNR: %d\n", rx_metadata.snr / 4 );
 
                     if( apps_modem_event_callback->down_data != NULL )
                     {
-                        apps_modem_event_callback->down_data(
-                            current_event.event_data.downdata.rssi, current_event.event_data.downdata.snr,
-                            current_event.event_data.downdata.window, current_event.event_data.downdata.fport,
-                            current_event.event_data.downdata.data, current_event.event_data.downdata.length );
+                        apps_modem_event_callback->down_data( rx_payload, length, rx_metadata, rx_remaining );
                     }
                     break;
-                case SMTC_MODEM_EVENT_UPLOADDONE:
+                case SMTC_MODEM_EVENT_UPLOAD_DONE:
                     HAL_DBG_TRACE_INFO( "###### ===== UPLOAD DONE EVENT ==== ######\n" );
                     HAL_DBG_TRACE_PRINTF( "Upload status: %s\n", smtc_modem_event_uploaddone_status_to_str(
                                                                      current_event.event_data.uploaddone.status ) );
@@ -172,13 +183,13 @@ void apps_modem_event_process( void )
                         apps_modem_event_callback->upload_done( current_event.event_data.uploaddone.status );
                     }
                     break;
-                case SMTC_MODEM_EVENT_SETCONF:
+                case SMTC_MODEM_EVENT_DM_SET_CONF:
                     HAL_DBG_TRACE_INFO( "###### ===== SET CONF EVENT ==== ######\n" );
-                    HAL_DBG_TRACE_PRINTF( "Tag: %s",
-                                          smtc_modem_event_setconf_tag_to_str( current_event.event_data.setconf.tag ) );
+                    HAL_DBG_TRACE_PRINTF(
+                        "Tag: %s", smtc_modem_event_setconf_opcode_to_str( current_event.event_data.setconf.opcode ) );
                     if( apps_modem_event_callback->set_conf != NULL )
                     {
-                        apps_modem_event_callback->set_conf( current_event.event_data.setconf.tag );
+                        apps_modem_event_callback->set_conf( current_event.event_data.setconf.opcode );
                     }
                     break;
                 case SMTC_MODEM_EVENT_MUTE:
@@ -190,72 +201,95 @@ void apps_modem_event_process( void )
                         apps_modem_event_callback->mute( current_event.event_data.mute.status );
                     }
                     break;
-                case SMTC_MODEM_EVENT_STREAMDONE:
+                case SMTC_MODEM_EVENT_STREAM_DONE:
                     HAL_DBG_TRACE_INFO( "###### ===== STREAM DONE EVENT ==== ######\n" );
                     if( apps_modem_event_callback->stream_done != NULL )
                     {
                         apps_modem_event_callback->stream_done( );
                     }
                     break;
-                case SMTC_MODEM_EVENT_TIME:
-                    HAL_DBG_TRACE_INFO( "###### ===== TIME EVENT ==== ######\n" );
-                    HAL_DBG_TRACE_PRINTF( "Time: %s\n",
-                                          smtc_modem_event_time_status_to_str( current_event.event_data.time.status ) );
-                    if( apps_modem_event_callback->time_updated_alc_sync != NULL )
+                case SMTC_MODEM_EVENT_LORAWAN_MAC_TIME:
+                    HAL_DBG_TRACE_INFO( "###### ===== LORAWAN MAC TIME EVENT ==== ######\n" );
+                    HAL_DBG_TRACE_PRINTF( "LoRaWAN MAC Time status : %s\n",
+                                          smtc_modem_event_mac_request_status_to_str(
+                                              current_event.event_data.lorawan_mac_time.status ) );
+
+                    smtc_modem_get_lorawan_mac_time( current_event.stack_id, &gps_time_s, &gps_fractional_s );
+
+                    if( apps_modem_event_callback->lorawan_mac_time != NULL )
                     {
-                        apps_modem_event_callback->time_updated_alc_sync( current_event.event_data.time.status );
+                        apps_modem_event_callback->lorawan_mac_time( current_event.event_data.lorawan_mac_time.status,
+                                                                     gps_time_s, gps_fractional_s );
+                    }
+
+                    break;
+                case SMTC_MODEM_EVENT_LORAWAN_FUOTA_DONE:
+                    HAL_DBG_TRACE_INFO( "###### ===== FUOTA DONE EVENT ==== ######\n" );
+                    if( apps_modem_event_callback->lorawan_fuota_done != NULL )
+                    {
+                        apps_modem_event_callback->lorawan_fuota_done( current_event.event_data.fmp.status );
                     }
                     break;
-                case SMTC_MODEM_EVENT_TIMEOUT_ADR_CHANGED:
-                    HAL_DBG_TRACE_INFO( "###### ===== ADR CHANGED EVENT ==== ######\n" );
-                    if( apps_modem_event_callback->adr_mobile_to_static != NULL )
+
+                case SMTC_MODEM_EVENT_NO_MORE_MULTICAST_SESSION_CLASS_C:
+                    HAL_DBG_TRACE_INFO( "###### ===== NO MORE MULTICAST SESSION CLASS C EVENT ==== ######\n" );
+                    if( apps_modem_event_callback->no_more_multicast_session_class_c != NULL )
                     {
-                        apps_modem_event_callback->adr_mobile_to_static( );
+                        apps_modem_event_callback->no_more_multicast_session_class_c( );
                     }
                     break;
-                case SMTC_MODEM_EVENT_NEW_LINK_ADR:
-                    HAL_DBG_TRACE_INFO( "###### ===== NEW LINK ADR EVENT ==== ######\n" );
-                    if( apps_modem_event_callback->new_link_adr != NULL )
+
+                case SMTC_MODEM_EVENT_NO_MORE_MULTICAST_SESSION_CLASS_B:
+                    HAL_DBG_TRACE_INFO( "###### ===== NO MORE MULTICAST SESSION CLASS B EVENT ==== ######\n" );
+                    if( apps_modem_event_callback->no_more_multicast_session_class_b != NULL )
                     {
-                        apps_modem_event_callback->new_link_adr( );
+                        apps_modem_event_callback->no_more_multicast_session_class_b( );
                     }
                     break;
+
+                case SMTC_MODEM_EVENT_NEW_MULTICAST_SESSION_CLASS_C:
+                    HAL_DBG_TRACE_INFO( "###### ===== NEW MULTICAST SESSION CLASS C EVENT ==== ######\n" );
+                    HAL_DBG_TRACE_PRINTF( "Multicast session: %s\n",
+                                          smtc_modem_event_new_multicast_group_session_to_str(
+                                              current_event.event_data.new_multicast_class_c.group_id ) );
+                    if( apps_modem_event_callback->new_multicast_session_class_c != NULL )
+                    {
+                        apps_modem_event_callback->new_multicast_session_class_c(
+                            current_event.event_data.new_multicast_class_c.group_id );
+                    }
+                    break;
+
+                case SMTC_MODEM_EVENT_NEW_MULTICAST_SESSION_CLASS_B:
+                    HAL_DBG_TRACE_INFO( "###### ===== NEW MULTICAST SESSION CLASS B EVENT ==== ######\n" );
+                    HAL_DBG_TRACE_PRINTF( "Multicast session: %s\n",
+                                          smtc_modem_event_new_multicast_group_session_to_str(
+                                              current_event.event_data.new_multicast_class_b.group_id ) );
+                    if( apps_modem_event_callback->new_multicast_session_class_b != NULL )
+                    {
+                        apps_modem_event_callback->new_multicast_session_class_b(
+                            current_event.event_data.new_multicast_class_b.group_id );
+                    }
+                    break;
+
                 case SMTC_MODEM_EVENT_LINK_CHECK:
                     HAL_DBG_TRACE_INFO( "###### ===== LINK CHECK EVENT ==== ######\n" );
-                    HAL_DBG_TRACE_PRINTF( "Link status: %s\n", smtc_modem_event_link_check_status_to_str(
+
+                    smtc_modem_get_lorawan_link_check_data( current_event.stack_id, &margin, &gw_cnt );
+
+                    HAL_DBG_TRACE_PRINTF( "Link status: %s\n", smtc_modem_event_mac_request_status_to_str(
                                                                    current_event.event_data.link_check.status ) );
-                    HAL_DBG_TRACE_PRINTF( "Margin: %d dB\n", current_event.event_data.link_check.margin );
-                    HAL_DBG_TRACE_PRINTF( "Number of gateways: %d\n", current_event.event_data.link_check.gw_cnt );
+                    HAL_DBG_TRACE_PRINTF( "Margin: %d dB\n", margin );
+                    HAL_DBG_TRACE_PRINTF( "Number of gateways: %d\n", gw_cnt );
                     if( apps_modem_event_callback->link_status != NULL )
                     {
-                        apps_modem_event_callback->link_status( current_event.event_data.link_check.status,
-                                                                current_event.event_data.link_check.margin,
-                                                                current_event.event_data.link_check.gw_cnt );
-                    }
-                    break;
-                case SMTC_MODEM_EVENT_ALMANAC_UPDATE:
-                    HAL_DBG_TRACE_INFO( "###### ===== ALMANAC UPDATE EVENT ==== ######\n" );
-                    HAL_DBG_TRACE_PRINTF( "Almanac update status: %s\n",
-                                          smtc_modem_event_almanac_update_status_to_str(
-                                              current_event.event_data.almanac_update.status ) );
-                    if( apps_modem_event_callback->almanac_update != NULL )
-                    {
-                        apps_modem_event_callback->almanac_update( current_event.event_data.almanac_update.status );
-                    }
-                    break;
-                case SMTC_MODEM_EVENT_USER_RADIO_ACCESS:
-                    HAL_DBG_TRACE_INFO( "###### ===== USER RADIO ACCESS EVENT ==== ######\n" );
-                    if( apps_modem_event_callback->user_radio_access != NULL )
-                    {
-                        apps_modem_event_callback->user_radio_access(
-                            current_event.event_data.user_radio_access.timestamp_ms,
-                            current_event.event_data.user_radio_access.status );
+                        apps_modem_event_callback->link_status( current_event.event_data.link_check.status, margin,
+                                                                gw_cnt );
                     }
                     break;
                 case SMTC_MODEM_EVENT_CLASS_B_PING_SLOT_INFO:
                     HAL_DBG_TRACE_INFO( "###### ===== CLASS B PING SLOT INFO EVENT ==== ######\n" );
                     HAL_DBG_TRACE_PRINTF( "Class B ping slot status: %s\n",
-                                          smtc_modem_event_class_b_ping_slot_status_to_str(
+                                          smtc_modem_event_mac_request_status_to_str(
                                               current_event.event_data.class_b_ping_slot_info.status ) );
                     if( apps_modem_event_callback->class_b_ping_slot_info != NULL )
                     {
@@ -273,31 +307,56 @@ void apps_modem_event_process( void )
                         apps_modem_event_callback->class_b_status( current_event.event_data.class_b_status.status );
                     }
                     break;
-                case SMTC_MODEM_EVENT_MIDDLEWARE_1:
-                    HAL_DBG_TRACE_INFO( "###### ===== MIDDLEWARE_1 EVENT ==== ######\n" );
-                    if( apps_modem_event_callback->middleware_1 != NULL )
+                case SMTC_MODEM_EVENT_GNSS_SCAN_DONE:
+                    HAL_DBG_TRACE_INFO( "###### ===== GNSS SCAN DONE EVENT ==== ######\n" );
+
+                    smtc_modem_gnss_get_event_data_scan_done( current_event.stack_id, &gnss_scan_done_data );
+
+                    if( apps_modem_event_callback->gnss_scan_done != NULL )
                     {
-                        apps_modem_event_callback->middleware_1(
-                            current_event.event_data.middleware_event_status.status );
+                        apps_modem_event_callback->gnss_scan_done( gnss_scan_done_data );
                     }
                     break;
-                case SMTC_MODEM_EVENT_MIDDLEWARE_2:
-                    HAL_DBG_TRACE_INFO( "###### ===== MIDDLEWARE_2 EVENT ==== ######\n" );
-                    if( apps_modem_event_callback->middleware_2 != NULL )
+                case SMTC_MODEM_EVENT_GNSS_TERMINATED:
+                    HAL_DBG_TRACE_INFO( "###### ===== GNSS TERMINATED EVENT ==== ######\n" );
+
+                    smtc_modem_gnss_get_event_data_terminated( current_event.stack_id, &gnss_terminated_data );
+
+                    if( apps_modem_event_callback->gnss_terminated != NULL )
                     {
-                        apps_modem_event_callback->middleware_2(
-                            current_event.event_data.middleware_event_status.status );
+                        apps_modem_event_callback->gnss_terminated( gnss_terminated_data );
                     }
                     break;
-                case SMTC_MODEM_EVENT_MIDDLEWARE_3:
-                    HAL_DBG_TRACE_INFO( "###### ===== MIDDLEWARE_3 EVENT ==== ######\n" );
-                    if( apps_modem_event_callback->middleware_3 != NULL )
+                case SMTC_MODEM_EVENT_GNSS_ALMANAC_DEMOD_UPDATE:
+                    HAL_DBG_TRACE_INFO( "###### ===== ALMANAC DEMOD UPDATE EVENT ==== ######\n" );
+                    smtc_modem_almanac_demodulation_get_event_data_almanac_update( current_event.stack_id,
+                                                                                   &almanac_demodulation_update );
+                    if( apps_modem_event_callback->gnss_almanac_demod_update != NULL )
                     {
-                        apps_modem_event_callback->middleware_3(
-                            current_event.event_data.middleware_event_status.status );
+                        apps_modem_event_callback->gnss_almanac_demod_update( almanac_demodulation_update );
                     }
                     break;
-                case SMTC_MODEM_EVENT_NONE:
+                case SMTC_MODEM_EVENT_WIFI_SCAN_DONE:
+                    HAL_DBG_TRACE_INFO( "###### ===== WIFI SCAN DONE EVENT ==== ######\n" );
+
+                    smtc_modem_wifi_get_event_data_scan_done( current_event.stack_id, &wifi_scan_done_data );
+
+                    if( apps_modem_event_callback->wifi_scan_done != NULL )
+                    {
+                        apps_modem_event_callback->wifi_scan_done( wifi_scan_done_data );
+                    }
+                    break;
+                case SMTC_MODEM_EVENT_WIFI_TERMINATED:
+                    HAL_DBG_TRACE_INFO( "###### ===== WIFI TERMINATED EVENT ==== ######\n" );
+
+                    smtc_modem_wifi_get_event_data_terminated( current_event.stack_id, &wifi_terminated_data );
+
+                    if( apps_modem_event_callback->wifi_terminated != NULL )
+                    {
+                        apps_modem_event_callback->wifi_terminated( wifi_terminated_data );
+                    }
+                    break;
+                case SMTC_MODEM_EVENT_MAX:
                     break;
                 default:
                     HAL_DBG_TRACE_INFO( "###### ===== UNKNOWN EVENT %u ==== ######\n", current_event.event_type );
@@ -311,9 +370,13 @@ void apps_modem_event_process( void )
         }
         else
         {
-            HAL_DBG_TRACE_ERROR( "smtc_modem_get_event != SMTC_MODEM_RC_OK\n" );
+            if( return_code != SMTC_MODEM_RC_NO_EVENT )
+            {
+                HAL_DBG_TRACE_ERROR( "smtc_modem_get_event != SMTC_MODEM_RC_OK\nreturn_code: %s\n",
+                                     smtc_modem_return_code_to_str( return_code ) );
+            }
         }
-    } while( ( return_code == SMTC_MODEM_RC_OK ) && ( current_event.event_type != SMTC_MODEM_EVENT_NONE ) );
+    } while( ( return_code == SMTC_MODEM_RC_OK ) && ( current_event.event_type != SMTC_MODEM_EVENT_MAX ) );
 }
 
 /*

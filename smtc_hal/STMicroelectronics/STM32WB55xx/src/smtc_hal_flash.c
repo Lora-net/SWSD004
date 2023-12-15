@@ -69,6 +69,8 @@
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
+static uint8_t copy_page[4096] = { 0xFF };
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
@@ -90,6 +92,11 @@ static uint32_t hal_flash_get_page( uint32_t address );
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
+
+uint16_t hal_flash_get_page_size( )
+{
+    return ADDR_FLASH_PAGE_SIZE;
+}
 
 smtc_hal_status_t hal_flash_init( void )
 {
@@ -298,6 +305,17 @@ void hal_flash_read_buffer( uint32_t addr, uint8_t* buffer, uint32_t size )
 uint32_t hal_flash_get_user_start_addr( void ) { return flash_user_start_addr; }
 
 void hal_flash_set_user_start_addr( uint32_t addr ) { flash_user_start_addr = addr; }
+
+void hal_flash_read_modify_write( uint32_t addr, const uint8_t* buffer, uint32_t size )
+{
+    uint32_t first_page = hal_flash_get_page( addr );
+
+    hal_flash_read_buffer( ( uint32_t )( FLASH_BASE + ( FLASH_PAGE_SIZE * first_page ) ), &copy_page[0], 4096 );
+    uint32_t index = addr - ( FLASH_BASE + ( FLASH_PAGE_SIZE * first_page ) );
+    memcpy( &copy_page[index], buffer, size );
+    hal_flash_erase_page( addr, 1 );
+    hal_flash_write_buffer( ( uint32_t )( FLASH_BASE + ( FLASH_PAGE_SIZE * first_page ) ), copy_page, 4096 );
+}
 
 /*
  * -----------------------------------------------------------------------------

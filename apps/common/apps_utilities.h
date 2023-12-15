@@ -47,6 +47,7 @@ extern "C" {
 #include <stdint.h>
 #include "smtc_modem_api.h"
 
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC MACROS -----------------------------------------------------------
@@ -89,10 +90,10 @@ extern "C" {
             HAL_DBG_TRACE_ERROR( "In %s - %s (line %d): %s\n", __FILE__, __func__, __LINE__, \
                                  xstr( SMTC_MODEM_RC_FAIL ) );                               \
         }                                                                                    \
-        else if( rc == SMTC_MODEM_RC_BAD_SIZE )                                              \
+        else if( rc == SMTC_MODEM_RC_NO_EVENT )                                              \
         {                                                                                    \
             HAL_DBG_TRACE_ERROR( "In %s - %s (line %d): %s\n", __FILE__, __func__, __LINE__, \
-                                 xstr( SMTC_MODEM_RC_BAD_SIZE ) );                           \
+                                 xstr( SMTC_MODEM_RC_NO_EVENT ) );                           \
         }                                                                                    \
         else if( rc == SMTC_MODEM_RC_NO_TIME )                                               \
         {                                                                                    \

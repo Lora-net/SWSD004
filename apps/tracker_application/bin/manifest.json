@@ -1,0 +1,17 @@
+{"lr1110_transceiver": {
+  "version": "03.08",
+  "url": "https://api.github.com/repos/Lora-net/radio_firmware_images/contents/lr1110/transceiver/lr1110_transceiver_0308.h",
+  "hash": "b6528986d0448b56d9282fe3bc0e678e"},
+  "lbm_app": {
+    "version": "2.03.00",
+    "url": "https://api.github.com/repos/Lora-net/SWSD004/contents/apps/tracker_application/bin/tracker_application.bin",
+    "hash": "025107862d0af581f0ea8b26f466eaf4"},
+  "lr1110_fa_transceiver": {
+    "version": "04.01",
+    "url": "https://api.github.com/repos/Lora-net/radio_firmware_images/contents/lr1110/transceiver/lr1110_transceiver_0401.h",
+    "hash": "9cf07cebd4b7163504a2999cea6cc7be"},
+  "lbm_fa_app": {
+    "version": "3.00.00",
+    "url": "https://api.github.com/repos/Lora-net/SWSD004/contents/apps/tracker_application/bin/tracker_application_autonomous.bin",
+    "hash": "341b9258aee6eeccd1d0aff695c29aae"}
+}

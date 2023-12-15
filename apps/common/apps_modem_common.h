@@ -70,37 +70,16 @@ extern "C" {
  */
 
 /*!
- * @brief Get the GPS time from the modem
- *
- * @returns GPS time in second
- */
-uint32_t apps_modem_common_get_gps_time( void );
-
-/*!
  * @brief Get the UTC time from the modem
  *
  * @returns UTC time in second, if no time available returns 0
  */
-uint32_t apps_modem_common_get_utc_time( void );
+uint32_t apps_modem_common_get_utc_time( uint8_t stack_id  );
 
 /*!
- * @brief convert GPS time to UTC time
+ * @brief convert GPS time in second since the last week number rollover to UTC time
  */
 uint32_t apps_modem_common_convert_gps_to_utc_time( uint32_t gps );
-
-/*!
- * @brief Configure LoRaWAN parameters (DevEUI, JoinEUI, AppKey, region and class)
- *
- * @remark All parameters are defined in lorawan_key_config.h file
- *
- * @param [in] stack_id Stack identifier
- */
-void apps_modem_common_configure_lorawan_params( uint8_t stack_id );
-
-/*!
- * @brief Display the Lora Basics Modem current version
- */
-void apps_modem_common_display_lbm_version( void );
 
 #ifdef __cplusplus
 }

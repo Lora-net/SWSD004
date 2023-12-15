@@ -46,7 +46,7 @@ extern "C" {
 
 #include <stdint.h>
 #include "smtc_modem_api.h"
-#include "smtc_modem_middleware_advanced_api.h"
+#include "smtc_modem_geolocation_api.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -70,10 +70,8 @@ typedef struct
 {
     /*!
      * @brief  Reset callback prototype.
-     *
-     * @param [in] reset_count
      */
-    void ( *reset )( uint16_t reset_count );
+    void ( *reset )( void );
     /*!
      * @brief  Alarm timer expired callback prototype.
      */
@@ -95,15 +93,13 @@ typedef struct
     /*!
      * @brief Downlink data received callback prototype.
      *
-     * @param [in] rssi    rssi in signed value in dBm + 64
-     * @param [in] snr     snr signed value in 0.25 dB steps
-     * @param [in] flags   rx flags \see smtc_modem_event_downdata_window_t
-     * @param [in] port    LoRaWAN port
      * @param [in] payload Received buffer pointer
-     * @param [in] size    Received buffer size
+     * @param [in] length    Received buffer size
+     * @param [in] metadata          Structure holding downlink metadata
+     * @param [in] remaining_data_nb Number of downlink data remaining
      */
-    void ( *down_data )( int8_t rssi, int8_t snr, smtc_modem_event_downdata_window_t rx_window, uint8_t port,
-                         const uint8_t* payload, uint8_t size );
+    void ( *down_data )( const uint8_t* payload, uint8_t length, smtc_modem_dl_metadata_t metadata,
+                         uint8_t remaining_data_nb );
     /*!
      * @brief  File upload completed callback prototype.
      *
@@ -113,9 +109,9 @@ typedef struct
     /*!
      * @brief  Set conf changed by DM callback prototype.
      *
-     * @param [in] tag \see smtc_modem_event_setconf_tag_t
+     * @param [in] opcode \see smtc_modem_event_setconf_opcode_t
      */
-    void ( *set_conf )( smtc_modem_event_setconf_tag_t tag );
+    void ( *set_conf )( smtc_modem_event_setconf_opcode_t opcode );
     /*!
      * @brief  Mute callback prototype.
      *
@@ -127,47 +123,73 @@ typedef struct
      */
     void ( *stream_done )( void );
     /*!
-     * @brief  Gnss Done Done callback prototype.
+     * @brief  Alc sync callback prototype.
      *
-     * @param [in] nav_message
-     * @param [in] size
+     * @param [in] gps_time_s       GPS time in seconds
      */
-    void ( *time_updated_alc_sync )( smtc_modem_event_time_status_t status );
+    void ( *time_updated_alc_sync )( uint32_t gps_time_s );
     /*!
-     * @brief  Automatic switch from mobile to static ADR when connection timeout occurs callback prototype.
+     * @brief  LoRaWAN time callback prototype.
+     *
+     * @param [in] status       Mac request status
+     * @param [in] gps_time_s       GPS time in seconds
+     * @param [in] gps_fractional_s GPS fractional second
      */
-    void ( *adr_mobile_to_static )( void );
+    void ( *lorawan_mac_time )( smtc_modem_event_mac_request_status_t status, uint32_t gps_time_s,
+                                uint32_t gps_fractional_s );
     /*!
-     * @brief  New link ADR request callback prototype.
+     * @brief  LoRaWAN FUOTA done callback prototype.
+     *
+     * @param [in] status       Firmware Management Package status
      */
-    void ( *new_link_adr )( void );
+    void ( *lorawan_fuota_done )( smtc_modem_event_fmp_status_t status );
+    /*!
+     * @brief  No more multicast session class C callback prototype.
+     */
+    void ( *no_more_multicast_session_class_c )( void );
+    /*!
+     * @brief  No more multicast session class b callback prototype.
+     */
+    void ( *no_more_multicast_session_class_b )( void );
+    /*!
+     * @brief  No more multicast session class C callback prototype.
+     *
+     * @param [in] group_id       Multicast group identifier
+     */
+    void ( *new_multicast_session_class_c )( smtc_modem_mc_grp_id_t group_id );
+    /*!
+     * @brief  No more multicast session class B callback prototype.
+     *
+     * @param [in] group_id       Multicast group identifier
+     */
+    void ( *new_multicast_session_class_b )( smtc_modem_mc_grp_id_t group_id );
     /*!
      * @brief  Link Status request callback prototype.
      *
-     * @param [in] status \see smtc_modem_event_link_check_status_t
+     * @param [in] status \see smtc_modem_event_mac_request_status_t
      * @param [in] margin The demodulation margin in dB
      * @param [in] gw_cnt number of gateways that received the most recent LinkCheckReq command
      */
-    void ( *link_status )( smtc_modem_event_link_check_status_t status, uint8_t margin, uint8_t gw_cnt );
+    void ( *link_status )( smtc_modem_event_mac_request_status_t status, uint8_t margin, uint8_t gw_cnt );
     /*!
      * @brief  Almanac update callback prototype.
      *
      * @param [in] status \see smtc_modem_event_almanac_update_status_t
      */
-    void ( *almanac_update )( smtc_modem_event_almanac_update_status_t status );
+    // void ( *almanac_update )( smtc_modem_event_almanac_update_status_t status );
     /*!
      * @brief  User radio access callback prototype.
      *
      * @param [in] timestamp_ms timestamp in ms of the radio irq
      * @param [in] status Interrupt status
      */
-    void ( *user_radio_access )( uint32_t timestamp_ms, smtc_modem_event_user_radio_access_status_t status );
+    // void ( *user_radio_access )( uint32_t timestamp_ms, smtc_modem_event_user_radio_access_status_t status );
     /*!
      * @brief  Class B ping slot status callback prototype
      *
      * @param [in] status Class B ping slot status
      */
-    void ( *class_b_ping_slot_info )( smtc_modem_event_class_b_ping_slot_status_t status );
+    void ( *class_b_ping_slot_info )( smtc_modem_event_mac_request_status_t status );
     /*!
      * @brief  Class B status callback prototype
      *
@@ -175,23 +197,35 @@ typedef struct
      */
     void ( *class_b_status )( smtc_modem_event_class_b_status_t status );
     /*!
-     * @brief  Middleware 1 callback prototype.
+     * @brief  GNSS Scan done callback prototype.
      *
-     * @param [in] status Interrupt status
+     * @param [in] data Scan done data, see \ref smtc_modem_gnss_event_data_scan_done_t
      */
-    void ( *middleware_1 )( uint8_t status );
+    void ( *gnss_scan_done )( smtc_modem_gnss_event_data_scan_done_t     data);
     /*!
-     * @brief  Middleware 2 callback prototype.
+     * @brief  GNSS terminated callback prototype.
      *
-     * @param [in] status Interrupt status
+     * @param [in] data Scan terminated data, see \ref smtc_modem_gnss_event_data_terminated_t
      */
-    void ( *middleware_2 )( uint8_t status );
+    void ( *gnss_terminated )( smtc_modem_gnss_event_data_terminated_t data );
     /*!
-     * @brief  Middleware 3 callback prototype.
+     * @brief  GNSS almanac demod callback prototype.
      *
-     * @param [in] status Interrupt status
+     * @param [in] data Almanac demod update, see \ref smtc_modem_almanac_demodulation_event_data_almanac_update_t
      */
-    void ( *middleware_3 )( uint8_t status );
+    void ( *gnss_almanac_demod_update )( smtc_modem_almanac_demodulation_event_data_almanac_update_t data );
+    /*!
+     * @brief  WIFI Scan done callback prototype.
+     *
+     * @param [in] data Scan done data, see \ref smtc_modem_wifi_event_data_scan_done_t
+     */
+    void ( *wifi_scan_done )( smtc_modem_wifi_event_data_scan_done_t data );
+    /*!
+     * @brief  WIFI terminated callback prototype.
+     *
+     * @param [in] data Scan terminated data, see \ref smtc_modem_wifi_event_data_terminated_t
+     */
+    void ( *wifi_terminated )( smtc_modem_wifi_event_data_terminated_t data );
 } apps_modem_event_callback_t;
 
 /*

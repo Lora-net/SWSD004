@@ -56,21 +56,28 @@
 // for memcpy
 #include <string.h>
 
+#include "lr11xx_system.h"
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE MACROS-----------------------------------------------------------
  */
 
+#ifndef MIN
+#define MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
+#endif
 
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE CONSTANTS -------------------------------------------------------
  */
 
-#define ADDR_FLASH_LORAWAN_CONTEXT ADDR_FLASH_PAGE(199)
-#define ADDR_FLASH_MODEM_CONTEXT ADDR_FLASH_PAGE(200)
-#define ADDR_FLASH_DEVNONCE_CONTEXT ADDR_FLASH_PAGE(198)
-#define ADDR_FLASH_SECURE_ELEMENT_CONTEXT ADDR_FLASH_PAGE(197)
+#define ADDR_FLASH_LORAWAN_CONTEXT ADDR_FLASH_PAGE( 199 )
+#define ADDR_FLASH_MODEM_CONTEXT ADDR_FLASH_PAGE( 200 )
+#define ADDR_FLASH_FUOTA_CONTEXT ADDR_FLASH_PAGE( 198 )
+#define ADDR_FLASH_SECURE_ELEMENT_CONTEXT ADDR_FLASH_PAGE( 197 )
+#define ADDR_FLASH_MODEM_KEY_CONTEXT ADDR_FLASH_PAGE( 195 )
+#define ADDR_FLASH_STORE_AND_FORWARD ADDR_FLASH_PAGE( 164 )
 
 /*
  * -----------------------------------------------------------------------------
@@ -82,14 +89,15 @@
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-static hal_gpio_irq_t radio_dio_irq;
-uint8_t __attribute__( ( section( ".noinit" ) ) ) saved_crashlog[CRASH_LOG_SIZE];
-volatile bool __attribute__( ( section( ".noinit" ) ) ) crashlog_available;
+static hal_gpio_irq_t                                             radio_dio_irq;
+__attribute__( ( section( ".noinit" ) ) ) static uint8_t          crashlog_buff_noinit[CRASH_LOG_SIZE];
+__attribute__( ( section( ".noinit" ) ) ) static volatile uint8_t crashlog_length_noinit;
+__attribute__( ( section( ".noinit" ) ) ) static volatile bool    crashlog_available_noinit;
 
 /*!
  * @brief Modem radio
  */
-extern ralf_t* modem_radio;
+extern void* radio_context;
 
 /*
  * -----------------------------------------------------------------------------
@@ -102,51 +110,19 @@ extern ralf_t* modem_radio;
  */
 
 /* ------------ Reset management ------------*/
-void smtc_modem_hal_reset_mcu( void )
-{
-    hal_mcu_reset( );
-}
+void smtc_modem_hal_reset_mcu( void ) { hal_mcu_reset( ); }
 
 /* ------------ Watchdog management ------------*/
 
-void smtc_modem_hal_reload_wdog( void )
-{
-    hal_watchdog_reload( );
-}
+void smtc_modem_hal_reload_wdog( void ) { hal_watchdog_reload( ); }
 
 /* ------------ Time management ------------*/
 
-uint32_t smtc_modem_hal_get_time_in_s( void )
-{
-    return hal_rtc_get_time_s( );
-}
+uint32_t smtc_modem_hal_get_time_in_s( void ) { return hal_rtc_get_time_s( ); }
 
-uint32_t smtc_modem_hal_get_compensated_time_in_s( void )
-{
-    return hal_rtc_get_time_s( );
-}
+uint32_t smtc_modem_hal_get_time_in_ms( void ) { return hal_rtc_get_time_ms( ); }
 
-int32_t smtc_modem_hal_get_time_compensation_in_s( void )
-{
-    return 0;
-}
-
-uint32_t smtc_modem_hal_get_time_in_ms( void )
-{
-    return hal_rtc_get_time_ms( );
-}
-
-uint32_t smtc_modem_hal_get_time_in_100us( void )
-{
-    return hal_rtc_get_time_100us( );
-}
-
-uint32_t smtc_modem_hal_get_radio_irq_timestamp_in_100us( void )
-{
-    // In current LBM implementation the call of this function is done in radio_planner radio irq handler
-    // so the current time is the irq time
-    return hal_rtc_get_time_100us( );
-}
+uint32_t smtc_modem_hal_get_time_in_100us( void ) { return hal_rtc_get_time_100us( ); }
 
 /* ------------ Timer management ------------*/
 
@@ -155,10 +131,7 @@ void smtc_modem_hal_start_timer( const uint32_t milliseconds, void ( *callback )
     hal_lp_timer_start( milliseconds, &( hal_lp_timer_irq_t ){ .context = context, .callback = callback } );
 }
 
-void smtc_modem_hal_stop_timer( void )
-{
-    hal_lp_timer_stop( );
-}
+void smtc_modem_hal_stop_timer( void ) { hal_lp_timer_stop( ); }
 
 /* ------------ IRQ management ------------*/
 
@@ -176,21 +149,28 @@ void smtc_modem_hal_enable_modem_irq( void )
 
 /* ------------ Context saving management ------------*/
 
-void smtc_modem_hal_context_restore( const modem_context_type_t ctx_type, uint8_t* buffer, const uint32_t size )
+void smtc_modem_hal_context_restore( const modem_context_type_t ctx_type, uint32_t offset, uint8_t* buffer,
+                                     const uint32_t size )
 {
     switch( ctx_type )
     {
     case CONTEXT_MODEM:
-        hal_flash_read_buffer( ADDR_FLASH_MODEM_CONTEXT, buffer, size );
+        hal_flash_read_buffer( ADDR_FLASH_MODEM_CONTEXT + offset, buffer, size );
         break;
-    case CONTEXT_LR1MAC:
-        hal_flash_read_buffer( ADDR_FLASH_LORAWAN_CONTEXT, buffer, size );
+    case CONTEXT_LORAWAN_STACK:
+        hal_flash_read_buffer( ADDR_FLASH_LORAWAN_CONTEXT + offset, buffer, size );
         break;
-    case CONTEXT_DEVNONCE:
-        hal_flash_read_buffer( ADDR_FLASH_DEVNONCE_CONTEXT, buffer, size );
+    case CONTEXT_FUOTA:
+        hal_flash_read_buffer( ADDR_FLASH_FUOTA_CONTEXT + offset, buffer, size );
         break;
     case CONTEXT_SECURE_ELEMENT:
-        hal_flash_read_buffer( ADDR_FLASH_SECURE_ELEMENT_CONTEXT, buffer, size );
+        hal_flash_read_buffer( ADDR_FLASH_SECURE_ELEMENT_CONTEXT + offset, buffer, size );
+        break;
+    case CONTEXT_STORE_AND_FORWARD:
+        hal_flash_read_buffer( ADDR_FLASH_STORE_AND_FORWARD + offset, buffer, size );
+        break;
+    case CONTEXT_KEY_MODEM:
+        hal_flash_read_buffer( ADDR_FLASH_MODEM_KEY_CONTEXT, buffer, size );
         break;
     default:
         mcu_panic( );
@@ -198,25 +178,52 @@ void smtc_modem_hal_context_restore( const modem_context_type_t ctx_type, uint8_
     }
 }
 
-void smtc_modem_hal_context_store( const modem_context_type_t ctx_type, const uint8_t* buffer, const uint32_t size )
+void smtc_modem_hal_context_flash_pages_erase( const modem_context_type_t ctx_type, uint32_t offset, uint8_t nb_page )
 {
+    switch( ctx_type )
+    {
+    case CONTEXT_STORE_AND_FORWARD:
+        hal_flash_erase_page( ADDR_FLASH_STORE_AND_FORWARD + offset, nb_page );
+        break;
+    default:
+        mcu_panic( );
+        break;
+    };
+}
+void smtc_modem_hal_context_store( const modem_context_type_t ctx_type, uint32_t offset, const uint8_t* buffer,
+                                   const uint32_t size )
+{
+    // Offset is only used for fuota purpose and for multistack features. To avoid ram consumption the use of
+    // hal_flash_read_modify_write is only done in these cases
     switch( ctx_type )
     {
     case CONTEXT_MODEM:
         hal_flash_erase_page( ADDR_FLASH_MODEM_CONTEXT, 1 );
         hal_flash_write_buffer( ADDR_FLASH_MODEM_CONTEXT, buffer, size );
         break;
-    case CONTEXT_LR1MAC:
+    case CONTEXT_LORAWAN_STACK:
+#if defined( MULTISTACK )
+        hal_flash_read_modify_write( ADDR_FLASH_LORAWAN_CONTEXT + offset, buffer, size );
+#else
         hal_flash_erase_page( ADDR_FLASH_LORAWAN_CONTEXT, 1 );
         hal_flash_write_buffer( ADDR_FLASH_LORAWAN_CONTEXT, buffer, size );
+#endif
         break;
-    case CONTEXT_DEVNONCE:
-        hal_flash_erase_page( ADDR_FLASH_DEVNONCE_CONTEXT, 1 );
-        hal_flash_write_buffer( ADDR_FLASH_DEVNONCE_CONTEXT, buffer, size );
+    case CONTEXT_FUOTA:
+#if defined( ALLOW_FUOTA )
+        hal_flash_read_modify_write( ADDR_FLASH_FUOTA + offset, buffer, size );
+#endif
         break;
     case CONTEXT_SECURE_ELEMENT:
         hal_flash_erase_page( ADDR_FLASH_SECURE_ELEMENT_CONTEXT, 1 );
         hal_flash_write_buffer( ADDR_FLASH_SECURE_ELEMENT_CONTEXT, buffer, size );
+        break;
+    case CONTEXT_STORE_AND_FORWARD:
+        hal_flash_write_buffer( ADDR_FLASH_STORE_AND_FORWARD + offset, buffer, size );
+        break;
+    case CONTEXT_KEY_MODEM:
+        hal_flash_erase_page( ADDR_FLASH_MODEM_KEY_CONTEXT, 1 );
+        hal_flash_write_buffer( ADDR_FLASH_MODEM_KEY_CONTEXT, buffer, size );
         break;
     default:
         mcu_panic( );
@@ -226,35 +233,41 @@ void smtc_modem_hal_context_store( const modem_context_type_t ctx_type, const ui
 
 /* ------------ Crashlog management ------------*/
 
-void smtc_modem_hal_store_crashlog( uint8_t crashlog[CRASH_LOG_SIZE] )
+void smtc_modem_hal_crashlog_store( const uint8_t* crash_string, uint8_t crash_string_length )
 {
-    memcpy( &saved_crashlog, crashlog, CRASH_LOG_SIZE );
+    crashlog_length_noinit = MIN( crash_string_length, CRASH_LOG_SIZE );
+    memcpy( crashlog_buff_noinit, crash_string, crashlog_length_noinit );
+    crashlog_available_noinit = true;
 }
 
-void smtc_modem_hal_restore_crashlog( uint8_t crashlog[CRASH_LOG_SIZE] )
+void smtc_modem_hal_crashlog_restore( uint8_t* crash_string, uint8_t* crash_string_length )
 {
-    memcpy( crashlog, &saved_crashlog, CRASH_LOG_SIZE );
+    *crash_string_length = ( crashlog_length_noinit > CRASH_LOG_SIZE ) ? CRASH_LOG_SIZE : crashlog_length_noinit;
+    memcpy( crash_string, crashlog_buff_noinit, *crash_string_length );
 }
 
-void smtc_modem_hal_set_crashlog_status( bool available )
-{
-    crashlog_available = available;
-}
+void smtc_modem_hal_crashlog_set_status( bool available ) { crashlog_available_noinit = available; }
 
-bool smtc_modem_hal_get_crashlog_status( void )
-{
-    return crashlog_available;
-}
+bool smtc_modem_hal_crashlog_get_status( void ) { return crashlog_available_noinit; }
 
 /* ------------ assert management ------------*/
 
-void smtc_modem_hal_assert_fail( uint8_t* func, uint32_t line )
+void smtc_modem_hal_on_panic( uint8_t* func, uint32_t line, const char* fmt, ... )
+
 {
-    smtc_modem_hal_store_crashlog( ( uint8_t* ) func );
-    smtc_modem_hal_set_crashlog_status( true );
+    uint8_t out_buff[255] = { 0 };
+    uint8_t out_len       = snprintf( ( char* ) out_buff, sizeof( out_buff ), "%s:%lu ", func, line );
+
+    va_list args;
+    va_start( args, fmt );
+    out_len += vsprintf( ( char* ) &out_buff[out_len], fmt, args );
+    va_end( args );
+
+    smtc_modem_hal_crashlog_store( out_buff, out_len );
+
     smtc_modem_hal_print_trace(
         "\x1B[0;31m"  // red color
-        "crash log :%s:%u\n"
+        "Modem panic :%s:%u\n"
         "\x1B[0m",  // revert default color
         func, line );
     smtc_modem_hal_reset_mcu( );
@@ -262,19 +275,9 @@ void smtc_modem_hal_assert_fail( uint8_t* func, uint32_t line )
 
 /* ------------ Random management ------------*/
 
-uint32_t smtc_modem_hal_get_random_nb( void )
-{
-    return hal_rng_get_random( );
-}
-
 uint32_t smtc_modem_hal_get_random_nb_in_range( const uint32_t val_1, const uint32_t val_2 )
 {
     return hal_rng_get_random_in_range( val_1, val_2 );
-}
-
-int32_t smtc_modem_hal_get_signed_random_nb_in_range( const int32_t val_1, const int32_t val_2 )
-{
-    return hal_rng_get_signed_random_in_range( val_1, val_2 );
 }
 
 /* ------------ Radio env management ------------*/
@@ -288,10 +291,7 @@ void smtc_modem_hal_irq_config_radio_irq( void ( *callback )( void* context ), v
     hal_gpio_irq_attach( &radio_dio_irq );
 }
 
-void smtc_modem_hal_radio_irq_clear_pending( void )
-{
-    hal_gpio_clear_pending_irq( SMTC_RADIO_DIOX );
-}
+void smtc_modem_hal_radio_irq_clear_pending( void ) { hal_gpio_clear_pending_irq( SMTC_RADIO_DIOX ); }
 
 void smtc_modem_hal_start_radio_tcxo( void )
 {
@@ -303,10 +303,9 @@ void smtc_modem_hal_stop_radio_tcxo( void )
     // put here the code that will stop the tcxo if needed
 }
 
-uint32_t smtc_modem_hal_get_radio_tcxo_startup_delay_ms( void )
-{
-    return 30;
-}
+uint32_t smtc_modem_hal_get_radio_tcxo_startup_delay_ms( void ) { return 30; }
+
+void smtc_modem_hal_set_ant_switch( bool is_tx_on ) {}
 
 /* ------------ Environment management ------------*/
 
@@ -332,14 +331,14 @@ int8_t smtc_modem_hal_get_temperature( void )
     uint16_t temperature_raw     = 0;
     float    temperature_celcius = 0;
 
-    lr11xx_system_get_temp( modem_radio->ral.context, &temperature_raw );
+    lr11xx_system_get_temp( radio_context, &temperature_raw );
     temperature_celcius = temperature_raw & 0x7FF;
     temperature_celcius = round( ( ( ( temperature_celcius / 2047 ) * 1.35 ) - 0.7295 ) * 1000 / -1.7 + 25 );
 
     return ( ( int8_t ) temperature_celcius );
 }
 
-uint8_t smtc_modem_hal_get_voltage( void )
+uint16_t smtc_modem_hal_get_voltage_mv( void )
 {
     uint16_t measure_vref_mv = 0;
     hal_adc_init( );
@@ -350,10 +349,14 @@ uint8_t smtc_modem_hal_get_voltage( void )
     return ( uint8_t )( measure_vref_mv / 20 );
 }
 
-int8_t smtc_modem_hal_get_board_delay_ms( void )
-{
-    return 1;
-}
+int8_t smtc_modem_hal_get_board_delay_ms( void ) { return 1; }
+
+
+/* ------------ Needed for Store and Forward service  ------------*/
+
+uint16_t smtc_modem_hal_flash_get_page_size( ) { return hal_flash_get_page_size( ); }
+
+uint16_t smtc_modem_hal_store_and_forward_get_number_of_pages( ) { return 30; }
 
 /* ------------ Trace management ------------*/
 
@@ -363,6 +366,67 @@ void smtc_modem_hal_print_trace( const char* fmt, ... )
     va_start( args, fmt );
     hal_trace_print( fmt, args );
     va_end( args );
+}
+
+/* ------------ Fuota management ------------*/
+
+#if defined( USE_FUOTA )
+uint32_t smtc_modem_hal_get_hw_version_for_fuota( void )
+{
+    // Example value, please fill with application value
+    return 0x12345678;
+}
+
+/**
+ * @brief Only use if fmp package is activated
+ *
+ * @return uint32_t fw version as defined in fmp Alliance package TS006-1.0.0
+ */
+uint32_t smtc_modem_hal_get_fw_version_for_fuota( void )
+{
+    // Example value, please fill with application value
+    return 0x11223344;
+}
+
+/**
+ * @brief Only use if fmp package is activated
+ *
+ * @return uint8_t fw status field as defined in fmp Alliance package TS006-1.0.0
+ */
+uint8_t smtc_modem_hal_get_fw_status_available_for_fuota( void )
+{
+    // Example value, please fill with application value
+    return 3;
+}
+
+uint32_t smtc_modem_hal_get_next_fw_version_for_fuota( void )
+{
+    // Example value, please fill with application value
+    return 0x17011973;
+}
+/**
+ * @brief Only use if fmp package is activated
+ * @param [in] fw_to_delete_version    fw_to_delete_version as described in TS006-1.0.0
+ * @return uint8_t fw status field as defined in fmp Alliance package TS006-1.0.0
+ */
+uint8_t smtc_modem_hal_get_fw_delete_status_for_fuota( uint32_t fw_to_delete_version )
+{
+    if( fw_to_delete_version != smtc_modem_hal_get_next_fw_version_for_fuota( ) )
+    {
+        return 2;
+    }
+    else
+    {
+        return 0;
+    }
+}
+#endif  // USE_FUOTA
+
+/* ------------ For Real Time OS compatibility  ------------*/
+
+void smtc_modem_hal_user_lbm_irq( void )
+{
+    // Do nothing in case implementation is bare metal
 }
 
 /*

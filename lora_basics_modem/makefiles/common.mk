@@ -22,7 +22,7 @@ $(TOP_DIR)/lora_basics_modem/printers/smtc_modem_api_str.c
 .PHONY: build_basic_modem
 
 build_basic_modem:
-	$(MAKE) -C $(LORA_BASICS_MODEM) basic_modem MCU_FLAGS="$(MCU) -DRP_MARGIN_DELAY=$(RP_MARGIN_DELAY)" RADIO=$(RADIO) RP_VERSION=$(RP_VERSION) MODEM_TRACE=$(MODEM_TRACE) CRYPTO=$(CRYPTO) MIDDLEWARE=$(MIDDLEWARE) DEBUG=$(DEBUG)
+	$(MAKE) -C $(LORA_BASICS_MODEM) basic_modem MCU_FLAGS="$(MCU) -DRP_MARGIN_DELAY=$(RP_MARGIN_DELAY)" RADIO=$(RADIO) RP_VERSION=$(RP_VERSION) MODEM_TRACE=$(MODEM_TRACE) CRYPTO=$(CRYPTO) LBM_GEOLOCATION=$(LBM_GEOLOCATION) DEBUG=$(DEBUG) LBM_STORE_AND_FORWARD=$(LBM_STORE_AND_FORWARD) REGION=$(REGION)  
 
 #-----------------------------------------------------------------------------
 # Clean targets

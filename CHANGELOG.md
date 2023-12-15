@@ -5,42 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.0] - 2023-06-12
+## [3.0.0] - 2023-11-12
 
-### changed
+### Added
 
-- [gnss_middleware] Update to V2.1.0, see [Changelog](geolocation_middleware/CHANGELOG.md).
-- [lora_basics_modem] Update to V2.1.0, see [Changelog](lora_basics_modem/lora_basics_modem/CHANGELOG.md).
-- [geolocation_gnss] Application code update according to geolocation middleware v2.1.0 and LoRa Basics Modem v3.3.0.
-- [geolocation_gnss_wifi] Application code update according to geolocation middleware v2.1.0 and LoRa Basics Modem v3.3.0.
-- [geolocation_wifi] Application code update according to geolocation middleware v2.1.0 and LoRa Basics Modem v3.3.0.
-- [tracker_application] Application code update according to geolocation middleware v2.1.0 and LoRa Basics Modem v3.3.0. see [Changelog](apps/demonstrations/tracker_application/CHANGELOG.md).
+- New app architecture, geolocation fully autonomous, device doesn't need to be connected to a network to start geolocation operation.
+- Add capability to send data thought store and forward service.
+- Uptate LoRa Basics Modem version from 3.3.0 to 4.3.0
 
-## [1.2.0] - 2023-01-23
+### removed
 
-### changed
+- [geolocation_gnss] Application code.
+- [geolocation_gnss_wifi] Application code.
+- [geolocation_wifi] Application code.
 
-- [gnss_middleware] Update to V2.0.0 implementing and supporting LoRa Edge 1.6, see [Changelog](geolocation_middleware/CHANGELOG.md).
-- [geolocation_gnss] Application code update according to geolocation middleware v2.0.0.
-- [geolocation_gnss_wifi] Application code update according to geolocation middleware v2.0.0.
-- [geolocation_wifi] Application code update according to geolocation middleware v2.0.0.
-- [geolocation_geolocation_server] Application code update according to new LoRaCloud MGS integration.
-- [tracker_application] Application code update according to geolocation middleware v2.0.0. see [Changelog](apps/demonstrations/tracker_application/CHANGELOG.md).
+## [2.3.0] - 2023-06-12
 
-## [1.1.0] - 2022-10-10
+### Change
+- Application code update according to geolocation middleware v2.1.0. see [Geolocation middleware Changelog](../../../geolocation_middleware/CHANGELOG.md).
+- Uptate LoRa Basics Modem version from 3.2.4 to 3.3.0
 
-### added
+## [2.2.0] - 2023-01-23
 
-- new features in tracker application, see [Changelog](apps/demonstrations/tracker_application/CHANGELOG.md).
-- Support of LR1120 shields.
+### Change
+- Application code update according to geolocation middleware v2.0.0. see [Geolocation middleware Changelog](../../../geolocation_middleware/CHANGELOG.md).
 
-## [1.0.1] - 2022-06-29
+## [2.1.1] - 2022-11-10
 
-### fix
+### Added
+- Support of the regions IN_865 / RU_864 / AU_915 / AS_923_GRP1 / AS_923_GRP2 /AS_923_GRP3 / KR_920   
 
-- bug fix in tracker application, see [Changelog](apps/demonstrations/tracker_application/CHANGELOG.md).
+### Change
+- General code improvement
 
-## [1.0.0] - 2022-06-15
+### Fixed
+- LoRa Basics Modem crashlog was not functionnal
+- `smtc_modem_hal_get_battery_level` was always returning 254
+- Race condition when time was not available anymore in `on_middleware_gnss_event` function
+
+## [2.0.8] - 2022-06-29
+
+### Fixed
+
+- Overconsumption in airplane mode
+- RTC rollover after 6 days
+
+## [2.0.7] - 2022-06-15
 
 ### Added
 

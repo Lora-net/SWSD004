@@ -59,7 +59,7 @@ extern "C" {
 #define FLASH_END_ADDR_OF_PAGE( page ) \
     ( ADDR_FLASH_PAGE( page ) + ADDR_FLASH_PAGE_SIZE - 1 )                    /* Last memory address of a flash page */
 #define FLASH_USER_END_ADDR ( FLASH_END_ADDR_OF_PAGE( FLASH_USER_END_PAGE ) ) /* End @ of user Flash area */
-#define FLASH_USER_END_PAGE ( 194 )                                           /* End nb page of user Flash area */
+#define FLASH_USER_END_PAGE ( 163 )                                           /* End nb page of user Flash area */
 
 /* Base address of the Flash s */
 #define ADDR_FLASH_PAGE_0 ( ( uint32_t ) 0x08000000 ) /* Base @ of Page 0, 2 KBytes */

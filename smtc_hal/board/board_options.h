@@ -40,15 +40,6 @@ extern "C" {
  * --- DEPENDENCIES ------------------------------------------------------------
  */
 
-#ifdef NUCLEO_L476RG
-#include "nucleo_l476rg/nucleo_l476rg_board_options.h"
-#include "nucleo_l476rg/nucleo_l476rg_pinout_mapping.h"
-#elif defined LR1110TRK1XKS
-#include "lr1110trk1xks/lr1110trk1xks_board_options.h"
-#else
-#error "Unknown board"
-#endif  // BOARD
-
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC MACROS -----------------------------------------------------------
@@ -58,6 +49,10 @@ extern "C" {
  * -----------------------------------------------------------------------------
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
+
+#define HAL_PRINTF_UART_ID 1
+#define HAL_RADIO_SPI_ID 1
+#define HAL_I2C_ID 1
 
 /*
  * -----------------------------------------------------------------------------

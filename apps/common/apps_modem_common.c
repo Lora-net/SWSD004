@@ -46,7 +46,6 @@
 #include "apps_utilities.h"
 #include "lorawan_key_config.h"
 #include "smtc_modem_api.h"
-#include "smtc_basic_modem_lr11xx_api_extension.h"
 #include "smtc_board.h"
 #include "smtc_hal.h"
 #include "smtc_modem_api_str.h"
@@ -65,6 +64,16 @@
  * @brief Offset in second between GPS EPOCH and UNIX EPOCH time
  */
 #define OFFSET_BETWEEN_GPS_EPOCH_AND_UNIX_EPOCH 315964800
+
+/*!
+ * @brief Number of sec in 1024 weeks
+ */
+#define ONE_WEEK_NUMBER_ROLLOVER_SEC 619315200
+
+/*!
+ * @brief Week number rollover between 2019 and 2038
+ */
+#define WEEK_NUMBER_ROLLOVER_2019_2038 2
 
 /*!
  * @brief Number of leap seconds as of September 15th 2021
@@ -101,43 +110,13 @@
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
 
-uint32_t apps_modem_common_get_gps_time( void )
-{
-    uint32_t gps_time_s       = 0;
-    uint32_t gps_fractional_s = 0;
-
-    const smtc_modem_return_code_t status = smtc_modem_get_time( &gps_time_s, &gps_fractional_s );
-
-    switch( status )
-    {
-    case SMTC_MODEM_RC_OK:
-    {
-        HAL_DBG_TRACE_INFO( "Current UTC time: %d s\n", gps_time_s );
-
-        break;
-    }
-    case SMTC_MODEM_RC_NO_TIME:
-    {
-        HAL_DBG_TRACE_WARNING( "No time available.\n" );
-        break;
-    }
-    default:
-    {
-        HAL_DBG_TRACE_ERROR( "Cannot get time from modem\n" );
-        break;
-    }
-    }
-
-    return gps_time_s;
-}
-
-uint32_t apps_modem_common_get_utc_time( void )
+uint32_t apps_modem_common_get_utc_time( uint8_t stack_id )
 {
     uint32_t gps_time_s       = 0;
     uint32_t gps_fractional_s = 0;
     time_t   time_utc         = 0;
 
-    const smtc_modem_return_code_t status = smtc_modem_get_time( &gps_time_s, &gps_fractional_s );
+    const smtc_modem_return_code_t status = smtc_modem_get_lorawan_mac_time( stack_id, &gps_time_s, &gps_fractional_s );
 
     switch( status )
     {
@@ -173,125 +152,8 @@ uint32_t apps_modem_common_get_utc_time( void )
 
 uint32_t apps_modem_common_convert_gps_to_utc_time( uint32_t gps_time_s )
 {
-    return gps_time_s + OFFSET_BETWEEN_GPS_EPOCH_AND_UNIX_EPOCH - OFFSET_LEAP_SECONDS;
-}
-
-void apps_modem_common_configure_lorawan_params( uint8_t stack_id )
-{
-    smtc_modem_return_code_t rc                              = SMTC_MODEM_RC_OK;
-    uint8_t                  dev_eui[LORAWAN_DEVICE_EUI_LEN] = LORAWAN_DEVICE_EUI;
-    uint8_t                  join_eui[LORAWAN_JOIN_EUI_LEN]  = LORAWAN_JOIN_EUI;
-
-#ifdef USER_DEFINED_JOIN_PARAMETERS
-
-    uint8_t app_key[LORAWAN_APP_KEY_LEN] = LORAWAN_APP_KEY;
-
-    rc = smtc_modem_set_deveui( stack_id, dev_eui );
-    if( rc != SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_set_deveui failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-    rc = smtc_modem_set_joineui( stack_id, join_eui );
-    if( rc != SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_set_joineui failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-    rc = smtc_modem_set_nwkkey( stack_id, app_key );
-    if( rc != SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_set_nwkkey failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-#endif
-
-    HAL_DBG_TRACE_INFO( "LoRaWAN parameters:\n" );
-
-    rc = smtc_modem_get_deveui( stack_id, dev_eui );
-    if( rc == SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ARRAY( "DevEUI", dev_eui, SMTC_MODEM_EUI_LENGTH );
-    }
-    else
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_get_deveui failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-    rc = smtc_modem_get_joineui( stack_id, join_eui );
-    if( rc == SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ARRAY( "JoinEUI", join_eui, SMTC_MODEM_EUI_LENGTH );
-    }
-    else
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_get_joineui failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-#ifdef LR11XX_DEFINED_JOIN_PARAMETERS
-
-    uint8_t chip_eui[LORAWAN_DEVICE_EUI_LEN];
-    uint8_t pin[4];
-
-    rc = smtc_modem_get_chip_eui( stack_id, chip_eui );
-    if( rc == SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ARRAY( "ChipEUI", chip_eui, LORAWAN_DEVICE_EUI_LEN );
-    }
-    else
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_get_chip_eui failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-    rc = smtc_modem_get_pin( stack_id, pin );
-    if( rc == SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ARRAY( "PIN", pin, 4 );
-    }
-    else
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_get_pin failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-#endif
-
-    rc = smtc_modem_set_class( stack_id, LORAWAN_CLASS );
-    if( rc != SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_set_class failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-    modem_class_to_string( LORAWAN_CLASS );
-
-    rc = smtc_modem_set_region( stack_id, LORAWAN_REGION );
-    if( rc != SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_ERROR( "smtc_modem_set_region failed: rc=%s (%d)\n", smtc_modem_return_code_to_str( rc ), rc );
-    }
-
-    modem_region_to_string( LORAWAN_REGION );
-
-    /* adapt the tx power offet depending on the board */
-    rc |= smtc_modem_set_tx_power_offset_db( stack_id, smtc_board_get_tx_power_offset( ) );
-}
-
-void apps_modem_common_display_lbm_version( void )
-{
-    smtc_modem_return_code_t     modem_response_code = SMTC_MODEM_RC_OK;
-    smtc_modem_lorawan_version_t lorawan_version;
-    smtc_modem_version_t         firmware_version;
-
-    modem_response_code = smtc_modem_get_lorawan_version( &lorawan_version );
-    if( modem_response_code == SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_INFO( "LoRaWAN version: %.2x.%.2x.%.2x.%.2x\n", lorawan_version.major, lorawan_version.minor,
-                            lorawan_version.patch, lorawan_version.revision );
-    }
-
-    modem_response_code = smtc_modem_get_modem_version( &firmware_version );
-    if( modem_response_code == SMTC_MODEM_RC_OK )
-    {
-        HAL_DBG_TRACE_INFO( "LoRa Basics Modem version: %.2x.%.2x.%.2x\n", firmware_version.major,
-                            firmware_version.minor, firmware_version.patch );
-    }
+    return gps_time_s + ( ONE_WEEK_NUMBER_ROLLOVER_SEC * WEEK_NUMBER_ROLLOVER_2019_2038 ) +
+           OFFSET_BETWEEN_GPS_EPOCH_AND_UNIX_EPOCH - OFFSET_LEAP_SECONDS;
 }
 
 /*

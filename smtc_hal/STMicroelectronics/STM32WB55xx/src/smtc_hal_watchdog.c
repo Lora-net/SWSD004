@@ -85,7 +85,7 @@ void hal_watchdog_init( void )
     HAL_IWDG_Init( &iwdg_handle );
 }
 
-void hal_watchdog_reload( void ) { HAL_IWDG_Refresh( &iwdg_handle ); }
+void hal_watchdog_reload( void ) { HAL_IWDG_Refresh( &iwdg_handle );}
 
 /*
  * -----------------------------------------------------------------------------

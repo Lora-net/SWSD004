@@ -27,27 +27,15 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Determine TARGET_MCU based on MCU_BOARD
-ifeq ($(MCU_BOARD), NUCLEO_L476RG)
-TARGET_MCU ?= STM32L476xx
-else ifeq ($(MCU_BOARD), LR1110TRK1XKS)
-TARGET_MCU ?= STM32WB55xx
-else
-$(error Invalid target board, please select a supported target board)
-endif
+TARGET_MCU = STM32WB55xx
 
 # Determine the MCU mk file to include based on TARGET_MCU
-ifeq ($(TARGET_MCU),STM32L476xx)
-SMTC_HAL_MAKEFILE = $(TOP_DIR)/smtc_hal/STMicroelectronics/STM32L4xx/smtc_hal_l4.mk
-else ifeq ($(TARGET_MCU),STM32WB55xx)
 SMTC_HAL_MAKEFILE = $(TOP_DIR)/smtc_hal/STMicroelectronics/STM32WB55xx/smtc_hal_wb55.mk
-else
-$(error Invalid target MCU, please select a supported target MCU)
-endif
 
 include $(SMTC_HAL_MAKEFILE)
 
 # include the target MCU mk file
-TARGET_MAKEFILE = $(TOP_DIR)/host_driver/target.mk
+TARGET_MAKEFILE = $(TOP_DIR)/host_driver/STM32WBxx/stm32wbxx.mk
 include $(TARGET_MAKEFILE)
 
 # At this point both MCU_BOARD and TARGET_MCU are good. So we had their value to the defined preprocessor tokens
