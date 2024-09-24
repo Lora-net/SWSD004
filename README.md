@@ -5,6 +5,7 @@
 The LoRa Edge Tracker reference design demonstration application illustrates a full-featured tracker application based on Lora Basics Modem and geolocation middlewares:
 
 - multi-source geolocation (Wi-Fi, GNSS, possibly ToA)
+- GNSS "NAV3" functionality: Improved scan accuracy, success rate and ability to operate without network provided assistance data 
 - low-power operation strategy (mobile/static GNSS scan, Wi-Fi backoff, accelerometer-based motion detection)
 - BLE and LoRaWAN configurability
 - firmware upgrade over BLE (LR1110 and application)
